@@ -1,0 +1,588 @@
+/**
+ * Lark CSV 同步工具 - 前端样式表
+ *
+ * 主要包含：
+ * 1. 全局基础样式（重置、字体、布局）
+ * 2. 卡片和弹窗组件
+ * 3. 表单元素样式（输入框、下拉框、按钮）
+ * 4. 映射列表布局
+ * 5. 进度条和状态徽章
+ * 6. 统计数字网格
+ * 7. 响应式适配
+ */
+
+/* ============================================================================
+   全局基础样式
+   ============================================================================ */
+
+/* 使用 border-box 模型，简化尺寸计算 */
+* {
+  box-sizing: border-box;
+}
+
+/* 页面背景和边距重置 */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #f3f4f6;
+}
+
+/* 全局字体和文本颜色 */
+body {
+  color: #1f2a37;
+  font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+}
+
+/* 应用容器：居中布局，自适应窗口宽度 */
+.app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 32px 40px;
+}
+
+/* ============================================================================
+   顶部工具栏（CSV 文件选择和同步按钮）
+   ============================================================================ */
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  margin: 14px 0;
+  flex-wrap: wrap;
+}
+
+/* 文件选择器：行内布局 */
+.file-input-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  flex-direction: row;
+}
+
+.file-input-inline input[type="file"] {
+  max-width: 260px;
+}
+
+.csv-info {
+  flex: 1;
+  min-width: 160px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* ============================================================================
+   页面标题与可折叠区域
+   ============================================================================ */
+
+.settings-collapse {
+  margin-top: 14px;
+}
+
+.settings-summary {
+  cursor: pointer;
+  list-style: none;
+  outline: none;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+  padding: 8px 12px;
+  margin: -8px -12px;
+  /* 补偿内边距，使头部对齐 */
+}
+
+/* 隐藏默认箭头 (Chrome, Firefox, Safari) */
+.settings-summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-summary:hover {
+  background-color: #e5e7eb;
+}
+
+.collapse-hint {
+  font-size: 13px;
+  color: #3b82f6;
+  margin-left: 8px;
+}
+
+.settings-collapse[open] .collapse-hint::after {
+  content: " ▲";
+}
+
+.settings-collapse:not([open]) .collapse-hint::after {
+  content: " ▼";
+}
+
+.settings-collapse[open] .settings-summary {
+  margin-bottom: 8px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.2;
+}
+
+.header p {
+  margin-top: 8px;
+  color: #4b5563;
+}
+
+/* ============================================================================
+   卡片组件（白色圆角容器）
+   ============================================================================ */
+
+.card {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 14px;
+  background: #fff;
+}
+
+.card h2,
+.card h3 {
+  margin: 0 0 10px;
+}
+
+/* ============================================================================
+   提示框样式（信息提示和错误提示）
+   ============================================================================ */
+
+.alert {
+  margin-top: 12px;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+/* 信息提示：浅青色背景 */
+.alert.info {
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  color: #0f766e;
+}
+
+/* 错误提示：浅红色背景 */
+.alert.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+/* 通用隐藏类 */
+.hidden {
+  display: none !important;
+}
+
+/* ============================================================================
+   网格布局（表单字段排列）
+   ============================================================================ */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+/* ============================================================================
+   表单元素样式
+   ============================================================================ */
+
+/* 标签：垂直布局 */
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #374151;
+}
+
+/* 输入框和下拉框通用样式 */
+select,
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="file"] {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  min-height: 38px;
+  padding: 0 10px;
+  background: #fff;
+  color: #111827;
+}
+
+input[type="file"] {
+  padding: 6px 10px; /* 特别调整文件选择框内部垂直居中 */
+  line-height: normal; /* 避免受到继承高度的异常挤压 */
+  cursor: pointer;
+}
+
+/* 只读输入框：灰色背景 */
+input[readonly] {
+  background: #f9fafb;
+}
+
+/* ============================================================================
+   模态弹窗（配置设置等）
+   ============================================================================ */
+
+/* 弹窗容器：全屏遮罩，居中布局 */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* 弹窗背景遮罩 */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+/* 弹窗内容面板 */
+.modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(920px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  padding: 16px;
+}
+
+/* 弹窗头部（标题和关闭按钮） */
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.modal-head h3 {
+  margin: 0;
+}
+
+/* ============================================================================
+   提示文本和映射列表
+   ============================================================================ */
+
+/* 提示文本样式 */
+.tip {
+  margin: 6px 0 0;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+/* 区域头部（标题和操作按钮并排） */
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 映射列表容器 */
+.mapping-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 映射行：三列布局（字段选择 | CSV列选择 | 删除按钮） */
+.mapping-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+}
+
+.mapping-cell {
+  min-width: 0;
+}
+
+/* ============================================================================
+   按钮和操作区域
+   ============================================================================ */
+
+/* 操作按钮组 */
+.actions {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* 行内操作按钮组 */
+.actions-inline {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* 通用按钮基础样式 */
+.button {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  height: 38px;
+  padding: 0 14px;
+  cursor: pointer;
+  background: #fff;
+  color: #1f2937;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 禁用状态 */
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* 主要按钮（蓝色） */
+.button.primary {
+  border-color: #6b8de3;
+  background: #6b8de3;
+  color: #fff;
+}
+
+/* 次要按钮（绿色边框） */
+.button.secondary {
+  border-color: #0f766e;
+  color: #0f766e;
+}
+
+/* 危险按钮（红色） */
+.button.danger {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* ============================================================================
+   状态显示和进度条
+   ============================================================================ */
+
+/* 状态行（徽章 + 描述文本） */
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* 进度面板容器 */
+.progress-panel {
+  margin-bottom: 12px;
+}
+
+/* 进度头部（阶段文本 + 百分比） */
+.progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.progress-phase {
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.progress-percent {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+
+/* 进度条轨道（背景） */
+.progress-track {
+  height: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #eef2f7;
+}
+
+/* 进度条填充（渐变动画） */
+.progress-bar {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2563eb, #22c55e);
+  transform: translateX(0);
+  transition: width 260ms ease;
+}
+
+/* 不确定进度动画（往复滑动） */
+.progress-bar.indeterminate {
+  width: 36% !important;
+  background: linear-gradient(90deg, #60a5fa, #2563eb);
+  animation: progress-indeterminate 1.2s ease-in-out infinite;
+}
+
+.progress-detail {
+  margin-top: 6px;
+}
+
+/* 不确定进度条动画关键帧 */
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+/* ============================================================================
+   状态徽章（待机/运行中/成功/失败）
+   ============================================================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* 灰色：待机中 */
+.badge-idle {
+  background: #6b7280;
+}
+
+/* 蓝色：运行中 */
+.badge-running {
+  background: #2563eb;
+}
+
+/* 绿色：成功 */
+.badge-success {
+  background: #16a34a;
+}
+
+/* 红色：失败 */
+.badge-failed {
+  background: #dc2626;
+}
+
+/* ============================================================================
+   统计数字网格
+   ============================================================================ */
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+/* 统计卡片 */
+.summary-grid>div {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 统计标签 */
+.summary-grid span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+/* 统计数字 */
+.summary-grid strong {
+  font-size: 20px;
+}
+
+/* ============================================================================
+   実行ログ（詳細）
+   ============================================================================ */
+.log-window {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f8fafc;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  height: 200px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-family: monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  word-break: break-all;
+  color: #374151;
+}
+
+.log-entry {
+  margin: 0;
+  padding: 2px 0;
+}
+
+.log-entry.error {
+  color: #dc2626;
+}
+
+/* ============================================================================
+   响应式适配（小屏幕）
+   ============================================================================ */
+
+@media (max-width: 768px) {
+
+  /* 顶部工具栏：垂直布局 */
+  .top-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* 映射行：单列布局 */
+  .mapping-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* 按钮组：垂直布局 */
+  .actions,
+  .actions-inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* 按钮：全宽居中 */
+  .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* 标题：缩小字体 */
+  .header h1 {
+    font-size: 32px;
+  }
+}

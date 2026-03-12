@@ -1,0 +1,75 @@
+{
+  "name": "lark-local-sync",
+  "version": "1.0.3",
+  "private": true,
+  "description": "Local executable CSV sync tool for Lark Base (insert/update/upsert)",
+  "author": "zhati",
+  "main": "src/desktop-main.js",
+  "scripts": {
+    "start": "set ELECTRON_RUN_AS_NODE=&& electron src/desktop-main.js",
+    "cli": "node src/main.js",
+    "gui": "node src/gui-server.js",
+    "desktop": "set ELECTRON_RUN_AS_NODE=&& electron src/desktop-main.js",
+    "build:exe": "electron-builder --win portable",
+    "build:installer": "electron-builder --win nsis",
+    "build:cli": "pkg . --targets node20-win-x64 --output dist/lark-local-sync-cli.exe"
+  },
+  "bin": {
+    "lark-local-sync": "src/main.js"
+  },
+  "pkg": {
+    "scripts": [
+      "src/**/*.js"
+    ],
+    "assets": [
+      "README.md",
+      ".env.example",
+      "public/**/*"
+    ]
+  },
+  "build": {
+    "appId": "com.zhati.larkcsvsync",
+    "productName": "Lark CSV Sync Tool",
+    "directories": {
+      "output": "dist"
+    },
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "package.json",
+      "README.md",
+      ".env.example"
+    ],
+    "extraMetadata": {
+      "main": "src/desktop-main.js"
+    },
+    "win": {
+      "artifactName": "${productName}-${version}-${target}.${ext}",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "csv-parse": "^5.5.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "iconv-lite": "^0.6.3",
+    "multer": "^2.0.2",
+    "open": "^10.2.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "electron": "^37.6.0",
+    "electron-builder": "^24.13.3",
+    "pkg": "^5.8.1"
+  }
+}

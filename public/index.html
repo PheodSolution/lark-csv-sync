@@ -1,0 +1,186 @@
+<!doctype html>
+<!-- Lark CSV 同步工具 - 前端页面 -->
+<!-- 提供基于 Web 的图形界面，用于管理 CSV 数据到 Lark Base 的同步任务 -->
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lark CSV Sync Tool</title>
+  <!-- 引入样式表 -->
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <main class="app">
+    <!-- ===== 区域 1: Lark 登录 ===== -->
+    <section class="card">
+      <h2>1. Larkにログイン</h2>
+      <div class="actions-inline">
+        <button id="editConfigBtn" type="button" class="button">設定</button>
+        <button id="loginBtn" type="button" class="button primary">ログイン</button>
+        <span id="loginStatus" class="tip">未ログイン</span>
+      </div>
+    </section>
+
+    <!-- ===== 区域 2: CSV 文件选择和同步开始按钮 ===== -->
+    <section class="card">
+      <h2>2. CSVファイルを選択</h2>
+      <div class="actions-inline">
+        <input id="csvFile" type="file" accept=".csv,text/csv" />
+        <span id="csvInfo" class="csv-info">未選択</span>
+        <button id="startBtn" type="button" class="button primary" disabled>同期開始</button>
+      </div>
+    </section>
+
+    <!-- ===== 区域 3: 页面标题和说明（可折叠区域开始） ===== -->
+    <details class="settings-collapse">
+      <summary class="settings-summary">
+        <span class="collapse-hint">（クリックで開閉）</span></p>
+      </summary>
+
+      <!-- ===== 错误和信息提示区域 ===== -->
+      <div id="errorAlert" class="alert error hidden"></div>
+      <div id="infoAlert" class="alert info hidden"></div>
+
+      <!-- ===== 区域 4: 基本设置（表格选择和同步模式） ===== -->
+      <section class="card">
+        <h2>基本設定</h2>
+        <div class="grid">
+          <label>
+            対象テーブル
+            <select id="tableId"></select>
+          </label>
+          <label>
+            同期モード
+            <select id="mode">
+              <option value="update">更新のみ</option>
+              <option value="upsert">更新 + 追加</option>
+              <option value="insert">追加のみ</option>
+              <option value="empty">空にする（キー一致時に空値で更新）</option>
+            </select>
+          </label>
+        </div>
+        <p id="modeTip" class="tip"></p>
+      </section>
+
+      <!-- ===== 区域 5: Key 字段映射配置（用于匹配已有记录） ===== -->
+      <section id="keyMappingCard" class="card">
+        <div class="section-head">
+          <h2>キーフィールドマッピング</h2>
+          <button id="addKeyMappingBtn" type="button" class="button secondary">マッピング追加</button>
+        </div>
+        <p class="tip">既存レコードの特定に使用します（複合キー対応）。「追加のみ」モードでは不要です。</p>
+        <div id="keyMappingsList" class="mapping-list"></div>
+      </section>
+
+      <!-- ===== 区域 6: 更新字段映射配置（更新时写入的字段） ===== -->
+      <section id="updateMappingCard" class="card">
+        <div class="section-head">
+          <h2>更新フィールドマッピング</h2>
+          <button id="addUpdateMappingBtn" type="button" class="button secondary">マッピング追加</button>
+        </div>
+        <p class="tip">更新時に書き込むフィールドです。「更新のみ」/「更新 + 追加」/「空にする」モードで使用します。</p>
+        <div id="updateMappingsList" class="mapping-list"></div>
+      </section>
+
+      <!-- ===== 区域 7: 插入字段映射配置（新增时写入的字段） ===== -->
+      <section id="insertMappingCard" class="card">
+        <div class="section-head">
+          <h2>追加フィールドマッピング</h2>
+          <button id="addInsertMappingBtn" type="button" class="button secondary">マッピング追加</button>
+        </div>
+        <p class="tip">新規追加時に書き込むフィールドです。「更新 + 追加」/「追加のみ」モードで使用します。</p>
+        <div id="insertMappingsList" class="mapping-list"></div>
+      </section>
+
+      <!-- ===== 自动映射和 Schema 重新加载按钮 ===== -->
+      <section class="actions">
+        <button id="autoMapBtn" type="button" class="button secondary" disabled>自動マッピング</button>
+        <button id="reloadSchemaBtn" type="button" class="button">スキーマ再読込</button>
+      </section>
+    </details>
+
+    <!-- ===== 区域 8: 执行状态和统计信息 ===== -->
+    <section class="card">
+      <h2>3. 実行ステータス</h2>
+      <!-- 状态徽章和文本 -->
+      <div class="status-line">
+        <span id="statusBadge" class="badge badge-idle">待機中</span>
+        <span id="statusText" class="tip">Larkにログインし、CSVファイルを選択してください。</span>
+      </div>
+      <!-- 进度条面板 -->
+      <div class="progress-panel">
+        <div class="progress-head">
+          <span id="progressPhase" class="progress-phase">待機中</span>
+          <span id="progressPercent" class="progress-percent">0%</span>
+        </div>
+        <div id="progressTrack" class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+          aria-valuenow="0">
+          <div id="progressBar" class="progress-bar" style="width: 0%"></div>
+        </div>
+        <p id="progressDetail" class="tip progress-detail">まだ同期は開始されていません。</p>
+      </div>
+      <!-- 统计数字网格 -->
+      <div class="summary-grid">
+        <div><span>処理数</span><strong id="stProcessed">0</strong></div>
+        <div><span>追加</span><strong id="stInserted">0</strong></div>
+        <div><span>更新</span><strong id="stUpdated">0</strong></div>
+        <div><span>失敗</span><strong id="stFailed">0</strong></div>
+        <div><span>スキップ</span><strong id="stSkipped">0</strong></div>
+        <div><span>索引件数</span><strong id="stIndexed">0</strong></div>
+      </div>
+      <!-- 错误 CSV 下载链接 -->
+      <div class="actions-inline">
+        <a id="errorCsvLink" class="button danger hidden" download>エラーCSVをダウンロード</a>
+      </div>
+    </section>
+    <section class="card">
+      <!-- 実行ログ（詳細） -->
+      <h2>4. 実行時ログ</h2>
+      <div id="logWindow" class="log-window"></div>
+    </section>
+  </main>
+
+  <!-- ===== 配置弹窗（Lark 应用设置） ===== -->
+  <div id="configModal" class="modal hidden" aria-hidden="true">
+    <!-- 弹窗背景遮罩（点击关闭） -->
+    <div id="configModalBackdrop" class="modal-backdrop"></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="configModalTitle">
+      <div class="modal-head">
+        <h3 id="configModalTitle">Lark設定</h3>
+        <button id="configModalCloseBtn" type="button" class="button">閉じる</button>
+      </div>
+      <!-- App ID 和 App Secret 输入 -->
+      <div class="grid">
+        <label>
+          App ID
+          <input id="appId" type="text" placeholder="cli_xxxxx" />
+        </label>
+        <label>
+          App Secret
+          <input id="appSecret" type="password" placeholder="********" />
+        </label>
+      </div>
+      <!-- OpenAPI Base 和 Base URL 输入 -->
+      <div class="grid">
+        <label>
+          OpenAPI Base
+          <input id="apiBase" type="text" placeholder="https://open.larksuite.com" />
+        </label>
+        <label>
+          Base URL
+          <input id="baseUrl" type="text" placeholder="https://xxx.larksuite.com/base/bas...?table=tbl..." />
+        </label>
+      </div>
+      <div class="actions-inline">
+        <button id="configModalSaveBtn" type="button" class="button secondary">設定を保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 引入前端应用逻辑 -->
+  <script src="./app.js"></script>
+</body>
+
+</html>
