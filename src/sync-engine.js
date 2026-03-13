@@ -1,6 +1,7 @@
 const path = require('path');
 const { createCsvRowStream, countCsvRows } = require('./csv-stream');
 const { saveCheckpoint } = require('./checkpoint');
+const { validateCsvRow } = require('./csv-validators');
 
 const CONCURRENCY_WRITE = 25;
 const PAGE_TOKEN_REPEAT_RETRY_LIMIT = 5;
@@ -2072,6 +2073,17 @@ async function runSync(params) {
     }
 
     stats.totalRows += 1;
+
+    // ビジネスロジック検証
+    const validationErrors = validateCsvRow(row);
+    if (validationErrors.length > 0) {
+      for (const ve of validationErrors) {
+        pushFailure(stats, rowCounterRef.value, ve.message, row);
+      }
+      emitRunningProgress(false);
+      continue;
+    }
+
     try {
       if (mode === MODE_INSERT) {
         const insertOnlyFields = buildFieldsFromRow(
