@@ -249,7 +249,7 @@ const PRESETS = [
       { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
       { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
       { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
-      { fieldName: 'エアバブル_予算（台）', csvColumn: '(内)エアバブル_予算' },
+      { fieldName: 'エアバブル_予算（台）', csvColumn: '（内）エアバブル_予算' },
     ],
 
     // 新增字段映射:ID 会在 upsert 插入分支中由 keyMappings 自动补齐
@@ -260,7 +260,7 @@ const PRESETS = [
       { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
       { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
       { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
-      { fieldName: 'エアバブル_予算（台）', csvColumn: '(内)エアバブル_予算' },
+      { fieldName: 'エアバブル_予算（台）', csvColumn: '（内）エアバブル_予算' },
     ],
   },
 
@@ -479,7 +479,7 @@ const PRESETS = [
       { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
       { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
       { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
-      { fieldName: 'エアバブル_予算（台）', csvColumn: '(内)エアバブル_予算' },
+      { fieldName: 'エアバブル_予算（台）', csvColumn: '（内）エアバブル_予算' },
       { fieldName: '浴暖_予算（台）', csvColumn: '浴室暖房_予算' },
       { fieldName: 'レンジフード_予算（台）', csvColumn: 'レンジフード_予算' },
       { fieldName: 'ビルトイン_予算（台）', csvColumn: 'GTビルトインコンロ_予算' },
@@ -518,7 +518,7 @@ const PRESETS = [
       { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
       { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
       { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
-      { fieldName: 'エアバブル_予算（台）', csvColumn: '(内)エアバブル_予算' },
+      { fieldName: 'エアバブル_予算（台）', csvColumn: '（内）エアバブル_予算' },
       { fieldName: '浴暖_予算（台）', csvColumn: '浴室暖房_予算' },
       { fieldName: 'レンジフード_予算（台）', csvColumn: 'レンジフード_予算' },
       { fieldName: 'ビルトイン_予算（台）', csvColumn: 'GTビルトインコンロ_予算' },
@@ -945,7 +945,7 @@ const PRESETS = [
       { fieldName: '顧客名（カナ）', csvColumn: '顧客名（カナ）' },
       { fieldName: '住所', csvColumn: '住所' },
       { fieldName: '建物名', csvColumn: '建物名' },
-      { fieldName: '戸建集合（潜在顧客のみ）', csvColumn: '戸建集合' },
+      { fieldName: '戸建・集合（潜在顧客のみ）', csvColumn: '戸建・集合（潜在顧客のみ）' },
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
       { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 同一个 CSV 列同时写入担当者和担当部署
@@ -983,7 +983,7 @@ const PRESETS = [
       { fieldName: '顧客名（カナ）', csvColumn: '顧客名（カナ）' },
       { fieldName: '住所', csvColumn: '住所' },
       { fieldName: '建物名', csvColumn: '建物名' },
-      { fieldName: '戸建集合（潜在顧客のみ）', csvColumn: '戸建・集合（潜在顧客のみ）' },
+      { fieldName: '戸建・集合（潜在顧客のみ）', csvColumn: '戸建・集合（潜在顧客のみ）' },
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
       { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 同一个 CSV 列同时写入担当者和担当部署
@@ -1131,7 +1131,7 @@ const PRESETS = [
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
       { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 同一个 CSV 列同时写入担当者和担当部署
-      { fieldName: '電話番号', csvColumn: '電話番号' },
+      // { fieldName: '電話番号', csvColumn: '電話番号' },
       { fieldName: '他社情報', csvColumn: '他社情報' },
       { fieldName: 'その他会社名', csvColumn: 'その他会社名' },
     ],
@@ -1266,7 +1266,7 @@ const PRESETS = [
       { fieldName: '商品名', csvColumn: '商品名（商品）' },
       { fieldName: '成約理由', csvColumn: '成約理由' },
       { fieldName: '成約理由詳細', csvColumn: '成約理由詳細' },
-      { fieldName: '敗戦理由(リフォーム)', csvColumn: '敗戦理由（リフォーム）' },
+      { fieldName: '敗戦理由(リフォーム)', csvColumn: '敗戦理由(リフォーム)' },
       { fieldName: '敗戦理由詳細', csvColumn: '敗戦理由詳細' },
     ],
 
@@ -1409,10 +1409,16 @@ const PRESETS = [
     tableName: '事業所マスタ',
 
     // Key 字段映射:空数组(insert 模式不需要 Key)
-    keyMappings: [],
+    keyMappings: [
+      { fieldName: '部署番号', csvColumn: '部署番号' },
+    ],
 
     // 更新字段映射:空数组(insert 模式不更新已有记录)
-    updateMappings: [],
+    updateMappings: [
+      { fieldName: '事務所名', csvColumn: '部署' },
+      { fieldName: '部署番号', csvColumn: '部署番号' },
+      { fieldName: '所属部署番号', csvColumn: '所属部署番号' },
+    ],
 
     // 新增字段映射:新增时写入部署基础信息
     insertMappings: [
