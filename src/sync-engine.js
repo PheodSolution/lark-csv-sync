@@ -282,6 +282,17 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
   const resolvers = new Map(); // 解析器映射表
   const seen = new Set();      // 已处理的字段名集合
 
+  // 获取所有表格列表以匹配表名
+  const allTables = await client.listTables(appToken);
+
+  // 目标系统配置: 特定表名及对应的必须要获取的项目字段
+  const TARGET_FIELDS_MAP = {
+    '顧客管理': ['需要家コード', '顧客名', '顧客名（カナ）'],
+    '事業所マスタ': ['事務所名'],
+    '従業員マスタ': ['社員番号', '社員氏名', '社員氏名(かな)'],
+    '案件管理': ['案件コード', '案件名'],
+  };
+
   // 遍历所有映射,找出关联字段
   for (const mapping of allMappings) {
     const fieldMeta = fieldMetaByName.get(normalizeText(mapping.fieldName));
@@ -294,30 +305,51 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
     // 跳过无效或已处理的字段
     if (!linkedTableId || seen.has(normalizeText(mapping.fieldName))) continue;
 
+    // 查找表名
+    const linkedTable = allTables.find((t) => t.table_id === linkedTableId);
+    if (!linkedTable || !linkedTable.name) {
+      throw new Error(`关联表解析失败: 无法找到 table_id 为 ${linkedTableId} 的关联表名称`);
+    }
+
+    // 标准化表名用于匹配 (移除空格)
+    const normalizedLinkedTableName = String(linkedTable.name).replace(/\s+/g, '');
+    
+    // 查找对应的配置项 (也忽略配置字典 key 的空格)
+    let requiredFields = null;
+    let matchedTableName = '';
+    for (const [tableName, fields] of Object.entries(TARGET_FIELDS_MAP)) {
+      if (tableName.replace(/\s+/g, '') === normalizedLinkedTableName) {
+        requiredFields = fields;
+        matchedTableName = tableName;
+        break;
+      }
+    }
+
+    if (!requiredFields) {
+      throw new Error(`关联表解析失败: 关联表 "${linkedTable.name}" 不在支持的配置范围内 (支持: ${Object.keys(TARGET_FIELDS_MAP).join(', ')})`);
+    }
+
     seen.add(normalizeText(mapping.fieldName));
 
     process.stdout.write(
-      `[link] resolving link field "${mapping.fieldName}" -> table ${linkedTableId}\n`
+      `[link] resolving link field "${mapping.fieldName}" -> table ${matchedTableName} (${linkedTableId})\n`
     );
 
     // 获取关联表的字段列表
     const linkedFields = await client.listFields(appToken, linkedTableId);
 
-    // 筛选可搜索字段(类型:1=文本,2=数字,13=电话,15=URL,22=场所)
+    // 强制筛选可搜索字段为 requiredFields 中的指定项目
     const searchableFields = linkedFields
-      .filter((f) => {
-        const t = Number(f.type);
-        return t === 1 || t === 2 || t === 13 || t === 15 || t === 22;
-      })
       .map((f) => f.field_name)
-      .filter(Boolean);
+      .filter((fieldName) => {
+        // 忽略大小写和空格进行匹配
+        const normalizedName = normalizeText(fieldName).replace(/\s+/g, '');
+        return requiredFields.some((reqField) => normalizeText(reqField).replace(/\s+/g, '') === normalizedName);
+      });
 
-    // 如果没有可搜索字段,跳过
+    // 如果没有能匹配上的必须字段,抛出错误
     if (searchableFields.length === 0) {
-      process.stdout.write(
-        `[link] no searchable text fields in linked table ${linkedTableId}, skipping\n`
-      );
-      continue;
+      throw new Error(`关联表解析失败: 在关联表 "${matchedTableName}" 中无法找到任何需要的特定字段 (${requiredFields.join(', ')})`);
     }
 
     process.stdout.write(
