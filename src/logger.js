@@ -1,9 +1,26 @@
 /**
- * Lark CSV 同步工具 - 日志拦截器
+ * Lark CSV 同期ツール - ログインターセプター
  * 
- * 拦截 process.stdout 和 process.stderr，自动在每行开头加上时间戳。
- * 例如：[18:40:03] [info] loading...
+ * process.stdout と process.stderr をインターセプトし、
+ * 各行の先頭にタイムスタンプを自動付与します。
+ * 例：[18:40:03] [info] loading...
+ *
+ * また、日本語 Windows 環境でのコンソール文字化けを防ぐため、
+ * stdout/stderr の encoding を UTF-8 に強制設定します。
  */
+
+// ─── UTF-8 強制設定 (日本語 Windows 対策) ───────────────────────────────────
+// Windows の場合、デフォルトの stdout encoding が CP932(Shift-JIS) になることがある。
+// Node.js の stream defaultEncoding を utf8 にすることで文字化けを防ぐ。
+if (process.platform === 'win32') {
+  // stdout/stderr の defaultEncoding を UTF-8 に設定
+  if (process.stdout && typeof process.stdout.setDefaultEncoding === 'function') {
+    process.stdout.setDefaultEncoding('utf8');
+  }
+  if (process.stderr && typeof process.stderr.setDefaultEncoding === 'function') {
+    process.stderr.setDefaultEncoding('utf8');
+  }
+}
 
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const originalStderrWrite = process.stderr.write.bind(process.stderr);
@@ -32,7 +49,7 @@ process.stdout.write = (chunk, encoding, callback) => {
       isStdoutNewLine = true;
     }
   }
-  return originalStdoutWrite(newChunk, encoding, callback);
+  return originalStdoutWrite(newChunk, 'utf8', callback);
 };
 
 let isStderrNewLine = true;
@@ -51,10 +68,10 @@ process.stderr.write = (chunk, encoding, callback) => {
       isStderrNewLine = true;
     }
   }
-  return originalStderrWrite(newChunk, encoding, callback);
+  return originalStderrWrite(newChunk, 'utf8', callback);
 };
 
-// 导出方法以供其他模块使用
+// モジュールエクスポート
 module.exports = {
   getTimestamp
 };

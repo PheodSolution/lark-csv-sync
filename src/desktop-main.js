@@ -171,10 +171,35 @@ function createMainWindow() {
     },
   }));
 
-  // 监听 'ready-to-show' 事件
+  // 監听 'ready-to-show' 事件
   // 当窗口内容加载完成且准备显示时触发(避免白屏闪烁)
   mainWindow.once('ready-to-show', () => {
     mainWindow.show(); // 显示窗口
+  });
+
+  /**
+   * 同期実行中のウィンドウクローズ防止
+   * レンダラー側の beforeunload で preventDefault() が呼ばれると
+   * will-prevent-unload イベントが発火する。
+   * ネイティブダイアログで確認し、ユーザーが「閉じる」を選んだ場合のみ強制クローズ。
+   */
+  mainWindow.webContents.on('will-prevent-unload', (event) => {
+    const answer = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning',
+      buttons: ['閉じる', 'キャンセル'],
+      defaultId: 1,       // デフォルトは「キャンセル」
+      cancelId: 1,
+      title: '同期実行中',
+      message: '同期が実行中です。',
+      detail: 'ウィンドウを閉じると同期処理が中断されます。\n本当に閉じますか？',
+    });
+    if (answer === 0) {
+      // 「閉じる」が選ばれた場合 → 強制クローズ
+      event.preventDefault(); // will-prevent-unload の「防止」自体をキャンセル
+      // destroyで強制終了（closeは再びbeforeunloadを呼ぶ可能性があるため）
+      mainWindow.destroy();
+    }
+    // answer === 1 の場合は何もしない（閉じる操作がキャンセルされる）
   });
 
   // 监听窗口关闭事件

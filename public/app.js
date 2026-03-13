@@ -565,8 +565,8 @@
       state.hasSavedConfig = Boolean(data.hasSavedConfig);
       updateConfigButtonLabel();
       closeConfigModal();
-      showInfo("Config saved locally.");
-      log("Config saved locally.");
+      showInfo("設定をローカルに保存しました。");
+      log("設定を保存しました。");
     } finally {
       state.busy = false;
       refreshControls();
@@ -1042,9 +1042,9 @@
         }
 
         log(
-          "Preset applied: " +
-            (state.preset.name || state.preset.id || "unknown") +
-            " / file=" +
+          "プリセット適用: " +
+            (state.preset.name || state.preset.id || "不明") +
+            " / ファイル=" +
             (state.preset.fileName || "")
         );
       }
@@ -1070,11 +1070,11 @@
           (state.mappingLocked ? " / 読み取り専用" : "")
       );
       log(
-        "Schema loaded: table=" +
+        "スキーマ読込完了: テーブル=" +
           tableLabel +
-          ", csvHeaders=" +
+          ", CSV列数=" +
           state.csvHeaders.length +
-          ", fieldNames=" +
+          ", Baseフィールド数=" +
           state.fieldNames.length
       );
     } finally {
@@ -1120,7 +1120,7 @@
           ? Number(data.size)
           : Number(file.size || 0);
       el.csvInfo.textContent = displayName + " (" + (sizeBytes / 1024 / 1024).toFixed(2) + " MB)";
-      log("CSV uploaded: " + displayName);
+      log("CSVアップロード完了: " + displayName);
       setStatus("idle", "CSVアップロード完了。スキーマを確認してください。");
     } finally {
       state.busy = false;
@@ -1159,7 +1159,7 @@
         "ログインウィンドウを開けませんでした。ポップアップを許可して再試行してください。"
       );
     }
-    log("Login popup opened. redirect=" + data.redirectUri);
+    log("ログインウィンドウを開きました。");
   }
 
   /**
@@ -1239,14 +1239,14 @@
         stopPolling();
         state.running = false;
         refreshControls();
-        log("Sync completed.");
+        log("同期完了。");
         return;
       }
 
       if (data.status === "failed") {
         setStatus("failed", data.error || data.message || "同期に失敗しました。");
         showError(data.error || data.message || "同期に失敗しました。");
-        if (data.hint) log("Hint: " + data.hint);
+        if (data.hint) log("ヒント: " + data.hint);
         stopPolling();
         state.running = false;
         refreshControls();
@@ -1281,7 +1281,7 @@
       const message = toErrorMessage(error);
       showError(message);
       setStatus("failed", message);
-      log("Validation failed: " + message);
+      log("バリデーションエラー: " + message, true);
       return;
     }
 
@@ -1289,10 +1289,8 @@
     showInfo("");
 
     state.running = true;
-    state.lastLogIndex = 0;       // 重置日志索引
-    if (el.logWindow) {
-       el.logWindow.innerHTML = ""; // 清空日志窗口
-    }
+    state.lastLogIndex = 0;       // ログインデックスをリセット（新ジョブのログを末尾に追加）
+    // ※ logWindow はクリアしない（以前のログを保持）
     refreshControls();
     resetStats();
     el.errorCsvLink.classList.add("hidden");
@@ -1312,7 +1310,7 @@
         detail: "ジョブをキューに登録しました。",
         indeterminate: true,
       });
-      log("Sync started. jobId=" + data.jobId);
+      log("同期開始。ジョブID=" + data.jobId);
 
       stopPolling();
       state.pollTimer = setInterval(function () {
@@ -1330,7 +1328,7 @@
         detail: message,
         indeterminate: false,
       });
-      log("Sync start failed: " + message);
+      log("同期開始エラー: " + message, true);
     }
   }
 
@@ -1360,7 +1358,7 @@
     }
 
     renderMappings();
-    log("Auto mapping applied: " + state.autoMappings.length + " rows.");
+    log("自動マッピング適用: " + state.autoMappings.length + " 行。");
   }
 
   /**
@@ -1423,7 +1421,7 @@
         state.authUserName = message.userName || "";
         updateLoginStatus();
         setStatus("idle", "ログイン成功。CSVファイルを選択してください。");
-        log("Login success: " + (state.authUserName || "Lark User"));
+        log("ログイン成功: " + (state.authUserName || "Lark User"));
         refreshControls();
         try {
           await tryAutoLoadSchema();
@@ -1441,7 +1439,7 @@
         const reason = message.error || "ログインに失敗しました。";
         showError(reason);
         setStatus("failed", reason);
-        log("Login failed: " + reason);
+        log("ログイン失敗: " + reason);
       }
     });
 
@@ -1469,7 +1467,7 @@
         const message = toErrorMessage(error);
         showError(message);
         setStatus("failed", message);
-        log("Save config failed: " + message);
+        log("設定保存失敗: " + message);
       });
     });
 
@@ -1484,7 +1482,7 @@
         const message = toErrorMessage(error);
         showError(message);
         setStatus("failed", message);
-        log("Login start failed: " + message);
+        log("ログイン開始失敗: " + message);
       } finally {
         state.busy = false;
         refreshControls();
@@ -1500,7 +1498,7 @@
         const message = toErrorMessage(error);
         showError(message);
         setStatus("failed", message);
-        log("CSV upload failed: " + message);
+        log("CSVアップロード失敗: " + message, true);
       });
     });
 
@@ -1511,7 +1509,7 @@
         const message = toErrorMessage(error);
         showError(message);
         setStatus("failed", message);
-        log("Reload schema failed: " + message);
+        log("スキーマ再読込失敗: " + message, true);
       });
     });
 
@@ -1539,7 +1537,7 @@
       } catch (error) {
         const message = toErrorMessage(error);
         showError(message);
-        log("Auto mapping failed: " + message);
+        log("自動マッピング失敗: " + message, true);
       }
     });
 
@@ -1548,7 +1546,7 @@
         const message = toErrorMessage(error);
         showError(message);
         setStatus("failed", message);
-        log("Reload schema failed: " + message);
+        log("スキーマ再読込失敗: " + message, true);
       });
     });
 
@@ -1557,7 +1555,7 @@
         const message = toErrorMessage(error);
         showError(message);
         setStatus("failed", message);
-        log("Start sync failed: " + message);
+        log("同期開始失敗: " + message, true);
       });
     });
 
@@ -1585,9 +1583,9 @@
       updateConfigButtonLabel();
       closeConfigModal();
       refreshControls();
-      log("Defaults loaded.");
+      log("デフォルト設定読込完了。");
     } catch (error) {
-      log("Failed to load defaults: " + toErrorMessage(error));
+      log("デフォルト読込失敗: " + toErrorMessage(error), true);
     }
   }
 
@@ -1612,6 +1610,17 @@
     setStatus("idle", "Larkにログインし、CSVファイルを選択してください。");
     await loadDefaults();
   }
+
+  // 同期実行中はウィンドウを閉じさせない（beforeunload ガード）
+  // ブラウザ環境: ブラウザ標準の離脱確認ダイアログが表示される
+  // Electron 環境: will-prevent-unload イベントを発火させ、main 側でネイティブダイアログを表示
+  window.addEventListener('beforeunload', function (e) {
+    if (!state.running) return;
+    e.preventDefault();
+    // 旧ブラウザ互換 (Chrome 等では returnValue も必要)
+    e.returnValue = '同期が実行中です。本当に閉じますか？';
+    return e.returnValue;
+  });
 
   // 执行初始化
   init();

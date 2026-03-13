@@ -37,6 +37,7 @@ if errorlevel 1 (
 echo [INFO] Occupying process stopped.
 
 :port_ready
+chcp 65001
 echo [INFO] Starting local desktop app...
 call npm run desktop
 set EXIT_CODE=%ERRORLEVEL%

@@ -236,9 +236,9 @@ function resolveNextPageToken({
     PAGE_TOKEN_REPEAT_RETRY_BASE_MS * 2 ** (attempt - 1)
   );
 
-  // 输出警告日志
+  // 警告ログを出力
   process.stdout.write(
-    `[warn] ${stageLabel}: repeated next page token (${nextPageToken}), retry ${attempt}/${PAGE_TOKEN_REPEAT_RETRY_LIMIT}\n`
+    `[warn] ${stageLabel}: ページトークンが繰り返されています (${nextPageToken})。再試 ${attempt}/${PAGE_TOKEN_REPEAT_RETRY_LIMIT}\n`
   );
 
   return {
@@ -333,7 +333,7 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
     seen.add(normalizeText(mapping.fieldName));
 
     process.stdout.write(
-      `[link] resolving link field "${mapping.fieldName}" -> table ${matchedTableName} (${linkedTableId})\n`
+      `[連携] リンクフィールド "${mapping.fieldName}" -> テーブル: ${matchedTableName} (${linkedTableId})\n`
     );
 
     // 获取关联表的字段列表
@@ -354,7 +354,7 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
     }
 
     process.stdout.write(
-      `[link] scanning linked table ${linkedTableId} with fields: ${searchableFields.join(', ')}\n`
+      `[連携] 関連テーブル ${linkedTableId} をスキャン中。フィールド: ${searchableFields.join(', ')}\n`
     );
 
     // 建立值到记录ID的映射
@@ -430,8 +430,8 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
       // 每 5000 条输出一次进度
       if (scanned > 0 && scanned % 5000 === 0) {
         process.stdout.write(
-          `[link] scanned ${scanned} unique records in linked table` +
-          (duplicateCount > 0 ? ` (deduped ${duplicateCount})` : '') +
+          `[連携] 関連テーブル: ${scanned} レコードをスキャン完了` +
+          (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
           '\n'
         );
       }
@@ -459,10 +459,10 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
       pageToken = pageDecision.nextPageToken;
     }
 
-    // 输出完成日志
+    // 完了ログを出力
     process.stdout.write(
-      `[link] built resolver for "${mapping.fieldName}": ${valueToIds.size} unique values from ${scanned} records` +
-      (duplicateCount > 0 ? ` (deduped ${duplicateCount})` : '') +
+      `[連携] "${mapping.fieldName}" のリゾルバー構築完了: ${valueToIds.size} ユニーク値 / ${scanned} レコード` +
+      (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
       '\n'
     );
 
@@ -1271,13 +1271,13 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
     // 每 5000 条输出进度
     if (scannedCount > 0 && scannedCount % 5000 === 0) {
       process.stdout.write(
-        `[index] scanned ${scannedCount} unique records, indexed ${indexedCount}` +
-        (duplicateCount > 0 ? ` (deduped ${duplicateCount})` : '') +
+        `[インデックス] ${scannedCount} レコードをスキャン。インデックス済み: ${indexedCount}` +
+        (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
         '\n'
       );
       emitProgress(onProgress, {
         phase: 'indexing',
-        message: `Building key index... scanned ${scannedCount}, indexed ${indexedCount}`,
+        message: `キーインデックス構築中... スキャン済み: ${scannedCount}、インデックス済み: ${indexedCount}`,
         stats,
       });
     }
@@ -1394,13 +1394,13 @@ async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMapp
     // 每 5000 条输出进度
     if (scannedCount > 0 && scannedCount % 5000 === 0) {
       process.stdout.write(
-        `[index:fallback] scanned ${scannedCount} unique records, indexed ${indexedCount}` +
-        (duplicateCount > 0 ? ` (deduped ${duplicateCount})` : '') +
+        `[インデックス:フォールバック] ${scannedCount} レコードをスキャン。インデックス済み: ${indexedCount}` +
+        (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
         '\n'
       );
       emitProgress(onProgress, {
         phase: 'indexing',
-        message: `Fallback indexing... scanned ${scannedCount}, indexed ${indexedCount}`,
+        message: `フォールバックインデックス中... スキャン済み: ${scannedCount}、インデックス済み: ${indexedCount}`,
         stats,
       });
     }
@@ -1921,7 +1921,7 @@ async function runSync(params) {
     ...effectiveUpdateMappings,
     ...effectiveInsertMappings,
   ];
-  logMessage('[link] checking for link fields in mappings...\n');
+  logMessage('[連携] マッピング内のリンクフィールドを確認中...\n');
   emitProgress(onProgress, {
     phase: 'resolving-links',
     message: '関連フィールド解析中...',
@@ -1931,14 +1931,14 @@ async function runSync(params) {
     client, appToken, fieldMetaByName, allMappingsForLink, onProgress, logMessage
   );
   if (linkResolvers.size > 0) {
-    logMessage(`[link] ${linkResolvers.size} link resolver(s) ready\n`);
+    logMessage(`[連携] ${linkResolvers.size} 件のリンクリゾルバー準備完了\n`);
   } else {
-    logMessage('[link] no link fields detected in mappings\n');
+    logMessage('[連携] マッピング内にリンクフィールドはなし\n');
   }
 
   let recordIndex = new Map();
   if (mode !== MODE_INSERT) {
-    logMessage('[index] building key index from existing records...\n');
+    logMessage('[インデックス] 既存レコードからキーインデックスを構築中...\n');
     emitProgress(onProgress, {
       phase: 'indexing',
       message: '既存レコードを索引中...',
@@ -1960,7 +1960,7 @@ async function runSync(params) {
       }
 
       logMessage(
-        `[warn] ${toErrorMessage(error)}\n[index] fallback: rebuilding key index via list records API...\n`
+        `[warn] ${toErrorMessage(error)}\n[インデックス:フォールバック] list records APIでキーインデックスを再構築中...\n`
       );
       emitProgress(onProgress, {
         phase: 'indexing',
@@ -1979,13 +1979,13 @@ async function runSync(params) {
     recordIndex = indexResult.recordIndex;
     stats.indexedRows = indexResult.indexedCount;
     logMessage(
-      `[index] done, scanned ${indexResult.scannedCount} unique records, indexed ${stats.indexedRows}` +
-      (indexResult.duplicateCount > 0 ? ` (deduped ${indexResult.duplicateCount})` : '') +
+      `[インデックス] 完了。スキャン済み: ${indexResult.scannedCount} レコード、インデックス登録: ${stats.indexedRows}` +
+      (indexResult.duplicateCount > 0 ? ` (重複除外: ${indexResult.duplicateCount})` : '') +
       '\n'
     );
     emitProgress(onProgress, {
       phase: 'indexing',
-      message: `Indexed ${stats.indexedRows} rows`,
+      message: `インデックス登録完了: ${stats.indexedRows} 行`,
       stats,
     });
   }
