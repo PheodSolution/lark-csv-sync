@@ -686,14 +686,6 @@ function profileKey(appToken, tableId) {
   return `${appToken}:${tableId}`;
 }
 
-function filterMappingsBySchema(mappings, csvHeaders, fieldNames) {
-  try {
-    return normalizeMappings(mappings || [], csvHeaders, fieldNames, 'profile');
-  } catch {
-    return [];
-  }
-}
-
 /**
  * 选择值字段映射
  * 优先级: 命令行参数 > 配置文件 > 自动映射 > 手动输入
@@ -996,36 +988,6 @@ async function main() {
   // 加载该表的配置
   let profileId = profileKey(appToken, selectedTableId);
   let currentProfile = profiles.profiles[profileId] || {};
-
-  const csvPathInput = await askIfNeeded(
-    {
-      type: 'text',
-      name: 'csvPath',
-      message: 'CSV file path',
-    },
-    args.csv,
-    currentProfile.csvPath || ''
-  );
-  const csvPath = path.resolve(process.cwd(), csvPathInput);
-  if (!fs.existsSync(csvPath)) {
-    throw new Error(`CSV file not found: ${csvPath}`);
-  }
-
-  const detectedPreset = detectSyncPreset(path.basename(csvPath));
-  if (detectedPreset) {
-    process.stdout.write(
-      `[preset] matched "${detectedPreset.name}" from filename, table=${detectedPreset.tableName}, mode=${detectedPreset.mode}\n`
-    );
-    const allTables = await client.listTables(appToken);
-    const presetTable = findTableByName(allTables, detectedPreset.tableName);
-    if (!presetTable) {
-      throw new Error(`Preset table not found in Base: ${detectedPreset.tableName}`);
-    }
-    selectedTableId = presetTable.table_id;
-    selectedTableName = presetTable.name || presetTable.table_id;
-    profileId = profileKey(appToken, selectedTableId);
-    currentProfile = profiles.profiles[profileId] || {};
-  }
 
   // 6. 获取 CSV 文件路径
   const csvPathInput = await askIfNeeded(
