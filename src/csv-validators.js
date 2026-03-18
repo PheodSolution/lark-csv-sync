@@ -41,6 +41,28 @@ const FIELD_VALIDATORS = {
     }
     return null;
   },
+  /**
+   * 電話番号: 只包含数字和 "-"，其他内容报错
+   */
+  '電話番号': (value) => {
+    const trimmed = String(value).trim();
+
+    // 只允许数字和半角连字符 -
+    if (!/^[0-9-]+$/.test(trimmed)) {
+      return '「電話番号」は数字と"-"のみで入力してください。';
+    }
+    return null;
+  },
+
+  '大家★電話番号': (value) => {
+    const trimmed = String(value).trim();
+
+    // 只允许数字和半角连字符 -
+    if (!/^[0-9-]+$/.test(trimmed)) {
+      return '「大家★電話番号」は数字と"-"のみで入力してください。';
+    }
+    return null;
+  },
 };
 
 // ============================================================================
