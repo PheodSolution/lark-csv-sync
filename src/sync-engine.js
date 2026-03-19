@@ -154,6 +154,72 @@ function getLinkTableId(meta) {
   return meta.property.table_id || meta.property.tableId || ''; // 返回表 ID
 }
 
+// 获取单选/多选字段的可用选项列表
+// @param {Object} meta - 字段元数据对象
+// @returns {Array<Object>} - 选项数组
+function getSelectOptions(meta) {
+  if (!meta || !meta.property || typeof meta.property !== 'object') return [];
+  return Array.isArray(meta.property.options) ? meta.property.options : [];
+}
+
+// 构建选项字段的标准化映射
+// 兼容 name / text / value 等多种字段结构，统一映射到 Base 中的实际选项值。
+// @param {Object} meta - 字段元数据对象
+// @returns {Map<string, string>} - 标准化候选值 -> Base 中实际选项值
+function buildSelectOptionMap(meta) {
+  const optionMap = new Map();
+
+  getSelectOptions(meta).forEach((option) => {
+    if (!option || typeof option !== 'object') return;
+
+    const actualValue = option.name || option.text || option.value || option.id || '';
+    if (!actualValue) return;
+
+    [option.name, option.text, option.value, option.id]
+      .map((item) => normalizeText(item))
+      .filter(Boolean)
+      .forEach((candidate) => {
+        if (!optionMap.has(candidate)) {
+          optionMap.set(candidate, String(actualValue).trim());
+        }
+      });
+  });
+
+  return optionMap;
+}
+
+// 校验并归一化单选/多选字段值
+// @param {string[]} tokens - CSV 拆分后的值数组
+// @param {Object} fieldMeta - 字段元数据对象
+// @param {string} fieldName - 字段名(用于错误提示)
+// @param {boolean} multiple - 是否为多选字段
+// @returns {string|string[]} - 可写入 Base 的合法值
+function normalizeSelectValue(tokens, fieldMeta, fieldName, multiple) {
+  if (!multiple && tokens.length > 1) {
+    throw new Error(
+      `フィールド "${fieldName}" は単一選択ですが、複数の値が入力されました: ${tokens.join(', ')}`
+    );
+  }
+
+  const optionMap = buildSelectOptionMap(fieldMeta);
+  if (optionMap.size === 0) {
+    // 没有可用选项元数据时保持现有行为，不额外阻断。
+    return multiple ? tokens : (tokens[0] || '');
+  }
+
+  const resolved = tokens.map((token) => {
+    const matched = optionMap.get(normalizeText(token));
+    if (!matched) {
+      throw new Error(
+        `フィールド "${fieldName}" の選択値 "${token}" は Lark Base の選択肢に存在しません`
+      );
+    }
+    return matched;
+  });
+
+  return multiple ? resolved : (resolved[0] || '');
+}
+
 /**
  * 处理分页 token 重复问题
  * 当 Lark API 返回重复的 page_token 时,进行重试或抛出错误
@@ -279,7 +345,7 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
   // 目标系统配置: 特定表名及对应的必须要获取的项目字段
   const TARGET_FIELDS_MAP = {
     '顧客管理': ['需要家コード', '顧客名', '顧客名（カナ）'],
-    '事業所マスタ': ['事務所名'],
+    '事業所マスタ': ['事務所名','部署番号'],
     '従業員マスタ': ['社員番号', '社員氏名', '社員氏名(かな)'],
     '案件管理': ['案件コード', '案件名'],
   };
@@ -480,10 +546,12 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
  *
  * 支持的字段类型:
  * - 关联字段(Link): 解析为记录ID数组
+ * - 成员/人员(type=11): 解析为 [{ id: user_id }]
  * - 数字(type=2): 解析为数字
  * - 日期时间(type=5): 解析为 Unix 时间戳(毫秒)
  * - 布尔(type=7): 解析为 true/false
- * - 多选(type=4): 分割为字符串数组
+ * - 单选(type=3): 校验值必须存在于 Base 选项中
+ * - 多选(type=4): 校验每个值必须存在于 Base 选项中
  * - 其他: 保持原始文本
  *
  * 关联字段解析策略:
@@ -539,6 +607,13 @@ function convertRawValue(raw, fieldMeta, fieldName, linkResolvers) {
   // 根据字段类型转换
   const type = Number(fieldMeta.type);
 
+  if (type === 11) {
+    // 人员字段要求传入 [{ id }] 数组，具体 ID 类型由请求上的 user_id_type 决定。
+    // 当前 lark-api.js 在 batch_create / batch_update 上统一指定为 user_id，
+    // 因此这里把 CSV 中的 user_id 文本转成成员对象数组。
+    return splitCellValues(text).map((userId) => ({ id: userId }));
+  }
+
   if (type === 2) {
     // 数字类型
     return parseNumberValue(text, fieldName);
@@ -554,9 +629,14 @@ function convertRawValue(raw, fieldMeta, fieldName, linkResolvers) {
     return parseBooleanValue(text, fieldName);
   }
 
+  if (type === 3) {
+    // 单选类型
+    return normalizeSelectValue(splitCellValues(text), fieldMeta, fieldName, false);
+  }
+
   if (type === 4) {
     // 多选类型
-    return splitCellValues(text);
+    return normalizeSelectValue(splitCellValues(text), fieldMeta, fieldName, true);
   }
 
   // 其他类型,返回原始文本
@@ -623,9 +703,16 @@ function toComparable(value) {
       .join('|');
   }
   if (typeof value === 'object') {
+    // Bitable 的数式/富文本字段有时返回 { type, value: [...] } 包装对象
+    // 这里优先递归展开 value，确保 key 比较使用真实文本，而不是整个对象的 JSON。
+    if ('value' in value) {
+      return toComparable(value.value);
+    }
     if (value.text) return String(value.text).trim();
     if (value.name) return String(value.name).trim();
     if (value.id) return String(value.id).trim();
+    if (value.display_name) return String(value.display_name).trim();
+    if (value.email) return String(value.email).trim();
     return JSON.stringify(value);
   }
   return String(value).trim();
