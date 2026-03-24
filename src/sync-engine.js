@@ -944,6 +944,62 @@ function pushFailure(stats, rowNumber, reason, rowData) {
   stats.failures.push({ rowNumber, reason, rowData: rowData || null });
 }
 
+// 从映射数组中查找指定 Base 字段对应的 CSV 列名
+// @param {Array<Object>} mappings - 映射数组
+// @param {string} fieldName - Base 字段名
+// @returns {string} - 对应的 CSV 列名,未找到返回空字符串
+function findCsvColumnByFieldName(mappings, fieldName) {
+  const target = normalizeText(fieldName);
+  const match = (Array.isArray(mappings) ? mappings : []).find(
+    (mapping) => normalizeText(mapping.fieldName) === target && mapping.csvColumn
+  );
+  return match ? String(match.csvColumn).trim() : '';
+}
+
+// 校验従業員マスタ中承認先不能指向当前行本人
+// 规则:
+// - 承認先① / 承認先② 的值不能等于当前行的 社員番号
+// - 命中时返回错误,由 runSync 统一写入 failures / error log
+// @param {Object} row - CSV 行对象
+// @param {Array<Object>} keyMappings - 主键映射
+// @param {Array<Object>} updateMappings - 更新映射
+// @param {Array<Object>} insertMappings - 插入映射
+// @returns {Array<Object>} - 错误数组 [{ message }]
+function validateEmployeeApproverSelfReference(row, keyMappings, updateMappings, insertMappings) {
+  const allMappings = [
+    ...(Array.isArray(keyMappings) ? keyMappings : []),
+    ...(Array.isArray(updateMappings) ? updateMappings : []),
+    ...(Array.isArray(insertMappings) ? insertMappings : []),
+  ];
+
+  const employeeNoColumn = findCsvColumnByFieldName(allMappings, '社員番号');
+  const approverColumns = Array.from(
+    new Set(
+      ['承認者1', '承認者2']
+        .map((fieldName) => findCsvColumnByFieldName(allMappings, fieldName))
+        .filter(Boolean)
+    )
+  );
+
+  if (!employeeNoColumn || approverColumns.length === 0) return [];
+
+  const employeeNo = normalizeText(row[employeeNoColumn]);
+  if (!employeeNo) return [];
+
+  const errors = [];
+  approverColumns.forEach((column) => {
+    const approverValues = splitCellValues(row[column]);
+    const selfAssigned = approverValues.some((item) => normalizeText(item) === employeeNo);
+    if (!selfAssigned) return;
+
+    errors.push({
+      message: `${column} の値に社員番号 ${String(row[employeeNoColumn] || '').trim()} は指定できません`,
+    });
+  });
+
+  return errors;
+}
+
 /**
  * 从更新映射中过滤掉主键字段
  * 防止更新操作修改主键字段
@@ -2152,7 +2208,15 @@ async function runSync(params) {
     stats.totalRows += 1;
 
     // ビジネスロジック検証
-    const validationErrors = validateCsvRow(row);
+    const validationErrors = [
+      ...validateCsvRow(row),
+      ...validateEmployeeApproverSelfReference(
+        row,
+        keyMappings,
+        effectiveUpdateMappings,
+        effectiveInsertMappings
+      ),
+    ];
     if (validationErrors.length > 0) {
       for (const ve of validationErrors) {
         pushFailure(stats, rowCounterRef.value, ve.message, row);
