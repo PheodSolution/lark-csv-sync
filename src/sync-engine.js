@@ -9,6 +9,11 @@ const PAGE_TOKEN_REPEAT_RETRY_BASE_MS = 500;
 const PAGE_TOKEN_REPEAT_RETRY_MAX_MS = 5000;
 const RUNNING_PROGRESS_MIN_ROW_STEP = 100;
 const RUNNING_PROGRESS_MIN_INTERVAL_MS = 500;
+const GEOCODER_TIMEOUT_MS = 10000;
+const GEOCODER_RATE_LIMIT_MS = 1000;
+const GSI_ADDRESS_SEARCH_URL = 'https://msearch.gsi.go.jp/address-search/AddressSearch';
+const GEOCODER_USER_AGENT = 'lark-csv-sync/1.0';
+const FIELD_TYPE_LOCATION = 22;
 const MODE_INSERT = 'insert';
 const MODE_UPDATE = 'update';
 const MODE_UPSERT = 'upsert';
@@ -138,6 +143,484 @@ function parseBooleanValue(raw, fieldName) {
 // 判断字段是否为关联字段(Link 类型)
 // @param {Object} meta - 字段元数据对象
 // @returns {boolean} - 是否为关联字段
+function toTrimmedString(value) {
+  return typeof value === 'string' ? value.trim() : String(value || '').trim();
+}
+
+// Lark Bitable 的位置字段要求使用 "经度,纬度" 顺序。
+function buildCoordinateString(longitude, latitude) {
+  return `${Number(longitude)},${Number(latitude)}`;
+}
+
+function pickObjectValue(source, keys) {
+  for (const key of keys) {
+    const value = toTrimmedString(source[key]);
+    if (value) return value;
+  }
+  return '';
+}
+
+// 位置字段的请求体只保留非空字符串，避免把空字段一并提交给 Bitable。
+function validateCoordinateRange(longitude, latitude) {
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+    return null;
+  }
+
+  const looksSwapped =
+    longitude >= -90 &&
+    longitude <= 90 &&
+    latitude >= -180 &&
+    latitude <= 180 &&
+    (latitude < -90 || latitude > 90);
+
+  if (looksSwapped) {
+    return {
+      longitude: latitude,
+      latitude: longitude,
+    };
+  }
+
+  if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
+    throw new Error(`location coordinate out of range: ${longitude},${latitude}`);
+  }
+
+  return { longitude, latitude };
+}
+
+function normalizeLocationCoordinate(raw) {
+  const parts = String(raw || '').split(',');
+  if (parts.length !== 2) {
+    throw new Error(`location coordinate must be "longitude,latitude": ${raw}`);
+  }
+
+  const coordinate = validateCoordinateRange(
+    Number(parts[0].trim()),
+    Number(parts[1].trim())
+  );
+  if (!coordinate) {
+    throw new Error(`location coordinate is invalid: ${raw}`);
+  }
+
+  return buildCoordinateString(coordinate.longitude, coordinate.latitude);
+}
+
+function tryParseCoordinatePair(raw) {
+  const trimmed = toTrimmedString(raw);
+  const coordinatePattern = /^-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?$/;
+  if (!coordinatePattern.test(trimmed)) return '';
+  return normalizeLocationCoordinate(trimmed);
+}
+
+function tryParsePointWkt(raw) {
+  const trimmed = toTrimmedString(raw);
+  const matched = trimmed.match(
+    /^POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)$/i
+  );
+  if (!matched) return '';
+  return normalizeLocationCoordinate(`${matched[1]},${matched[2]}`);
+}
+
+function extractCoordinateHintFromRowValues(values) {
+  for (const rawValue of Object.values(values || {})) {
+    const value = toTrimmedString(rawValue);
+    if (!value) continue;
+
+    const fromPair = tryParseCoordinatePair(value);
+    if (fromPair) return fromPair;
+
+    const fromPoint = tryParsePointWkt(value);
+    if (fromPoint) return fromPoint;
+  }
+  return '';
+}
+
+function extractCoordinateFromRawLocationInput(raw) {
+  const trimmed = toTrimmedString(raw);
+  if (!trimmed) return '';
+
+  const fromPair = tryParseCoordinatePair(trimmed);
+  if (fromPair) return fromPair;
+
+  const fromPoint = tryParsePointWkt(trimmed);
+  if (fromPoint) return fromPoint;
+
+  if (!trimmed.startsWith('{')) return '';
+
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return '';
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return '';
+  }
+
+  const source = parsed;
+  const locationFromField = pickObjectValue(source, ['location']);
+  const longitude = pickObjectValue(source, ['longitude', 'lng', 'lon']);
+  const latitude = pickObjectValue(source, ['latitude', 'lat']);
+  return (
+    tryParseCoordinatePair(locationFromField) ||
+    (longitude && latitude
+      ? normalizeLocationCoordinate(`${longitude},${latitude}`)
+      : '')
+  );
+}
+
+function extractAddressCandidateFromRawLocationInput(raw) {
+  const trimmed = toTrimmedString(raw);
+  if (!trimmed) return '';
+  if (extractCoordinateFromRawLocationInput(trimmed)) return '';
+
+  if (!trimmed.startsWith('{')) {
+    return trimmed;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return '';
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return '';
+  }
+
+  const source = parsed;
+  return (
+    pickObjectValue(source, ['fullAddress', 'full_address']) ||
+    pickObjectValue(source, ['address']) ||
+    pickObjectValue(source, ['name'])
+  );
+}
+
+function extractCoordinateFromLocationCell(cellValue) {
+  if (!cellValue) return '';
+  if (typeof cellValue === 'string') {
+    return tryParseCoordinatePair(cellValue) || '';
+  }
+  if (typeof cellValue !== 'object' || Array.isArray(cellValue)) return '';
+
+  const rawLocation = toTrimmedString(cellValue.location);
+  if (!rawLocation) return '';
+
+  const normalized = tryParseCoordinatePair(rawLocation);
+  return normalized || '';
+}
+
+function buildAddressOnlyLocation(rawAddress, coordinateHint, fullAddressOverride) {
+  const rawText = toTrimmedString(rawAddress);
+  const location = coordinateHint || tryParseCoordinatePair(rawText) || tryParsePointWkt(rawText) || '';
+  if (location) return location;
+
+  const addressText = toTrimmedString(fullAddressOverride) || rawText;
+  throw new Error(`field "位置" could not build coordinate from address: ${addressText}`);
+}
+
+function buildLocationCellValue(raw, previousCellValue, rowCoordinateHint) {
+  const trimmed = toTrimmedString(raw);
+  if (!trimmed) {
+    throw new Error('位置の値が空です');
+  }
+
+  // Address text must resolve to fresh coordinates first; only same-row explicit coordinates can short-circuit geocoding.
+  const fallbackCoordinate = rowCoordinateHint || '';
+
+  if (!trimmed.startsWith('{')) {
+    const directCoordinate = tryParseCoordinatePair(trimmed) || tryParsePointWkt(trimmed);
+    const result = buildAddressOnlyLocation(
+      trimmed,
+      directCoordinate || fallbackCoordinate || ''
+    );
+    if (result) return result;
+
+    throw new Error(
+      '位置フィールドが住所テキストの場合、経緯度の提供、同行座標、または既存レコード座標の再利用が必要です'
+    );
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    throw new Error(`位置JSON解析失敗: ${toErrorMessage(error)}`);
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('位置の値はJSONオブジェクトでなければなりません');
+  }
+
+  const source = parsed;
+  const locationFromField = pickObjectValue(source, ['location']);
+  const longitude = pickObjectValue(source, ['longitude', 'lng', 'lon']);
+  const latitude = pickObjectValue(source, ['latitude', 'lat']);
+  const locationByLngLat =
+    longitude && latitude ? normalizeLocationCoordinate(`${longitude},${latitude}`) : '';
+  const locationFromFieldCoordinate = tryParseCoordinatePair(locationFromField);
+  const location =
+    locationFromFieldCoordinate || locationByLngLat || fallbackCoordinate || '';
+
+  if (!location) {
+    if (locationFromField) {
+      throw new Error('位置JSONのlocationは "longitude,latitude" 形式でなければなりません');
+    }
+    throw new Error(
+      '位置JSONに経緯度がありません。location または longitude + latitude を指定してください'
+    );
+  }
+
+  return location;
+}
+
+function locationToKeyPart(cellValue) {
+  if (cellValue === null || cellValue === undefined) return '';
+  if (typeof cellValue !== 'object' || Array.isArray(cellValue)) {
+    const rawText = String(cellValue);
+    try {
+      return normalizeLocationCoordinate(rawText);
+    } catch {
+      return normalizeText(rawText);
+    }
+  }
+
+  const location = toTrimmedString(cellValue.location);
+  if (location) {
+    try {
+      return normalizeLocationCoordinate(location);
+    } catch {
+      return normalizeText(location);
+    }
+  }
+
+  const fullAddress =
+    toTrimmedString(cellValue.fullAddress) || toTrimmedString(cellValue.full_address);
+  return normalizeText(fullAddress);
+}
+
+function toHalfWidthDigits(value) {
+  return String(value || '').replace(/[\uFF10-\uFF19]/g, (char) =>
+    String.fromCharCode(char.charCodeAt(0) - 0xfee0)
+  );
+}
+
+function normalizeJapaneseAddressForGeocoding(address) {
+  return toHalfWidthDigits(toTrimmedString(address))
+    .replace(/\s+/g, '')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u30FC\uFF0D]/g, '-')
+    .replace(/\u4E01\u76EE/g, '-')
+    .replace(/\u756A\u5730?/g, '-')
+    .replace(/\u53F7/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+}
+
+function createPostalAddressQueryCandidates(postalCode, address) {
+  const normalizedPostal = toTrimmedString(postalCode).replace(/^\u3012/, '');
+  const rawAddress = toTrimmedString(address);
+  const normalizedAddress = normalizeJapaneseAddressForGeocoding(rawAddress);
+  const seen = new Set();
+  const candidates = [];
+
+  const add = (value) => {
+    const trimmed = toTrimmedString(value);
+    if (!trimmed) return;
+
+    const key = normalizeText(trimmed);
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(trimmed);
+  };
+
+  // Try a few deterministic JP-friendly variants to improve Japanese geocoding hit rate.
+  add([normalizedPostal, rawAddress].filter(Boolean).join(' '));
+  add([normalizedPostal.replace(/-/g, ''), rawAddress].filter(Boolean).join(' '));
+  add(rawAddress);
+  if (normalizedAddress && normalizedAddress !== rawAddress) {
+    add([normalizedPostal, normalizedAddress].filter(Boolean).join(' '));
+    add([normalizedPostal.replace(/-/g, ''), normalizedAddress].filter(Boolean).join(' '));
+    add(normalizedAddress);
+  }
+  return candidates;
+}
+
+function createJapanAddressGeocoder() {
+  const cache = new Map();
+  let lastRequestAt = 0;
+
+  const resolve = async (address) => {
+    const trimmedAddress = toTrimmedString(address);
+    if (!trimmedAddress) {
+      throw new Error('address is empty');
+    }
+
+    const cacheKey = normalizeText(trimmedAddress);
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const requestPromise = (async () => {
+      // Keep one-query-per-second pacing and cache identical lookups.
+      const elapsed = Date.now() - lastRequestAt;
+      if (elapsed < GEOCODER_RATE_LIMIT_MS) {
+        await sleep(GEOCODER_RATE_LIMIT_MS - elapsed);
+      }
+      lastRequestAt = Date.now();
+
+      const url = new URL(GSI_ADDRESS_SEARCH_URL);
+      url.searchParams.set('q', trimmedAddress);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, GEOCODER_TIMEOUT_MS);
+
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': GEOCODER_USER_AGENT,
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = await response.json();
+        if (!Array.isArray(payload) || payload.length === 0) {
+          throw new Error('no coordinates found');
+        }
+
+        const first = payload[0];
+        if (!first || typeof first !== 'object' || Array.isArray(first)) {
+          throw new Error('unexpected response shape');
+        }
+
+        const coordinates =
+          first.geometry &&
+          typeof first.geometry === 'object' &&
+          Array.isArray(first.geometry.coordinates)
+            ? first.geometry.coordinates
+            : null;
+        if (!coordinates || coordinates.length < 2) {
+          throw new Error('response coordinates missing');
+        }
+
+        const longitude = toTrimmedString(coordinates[0]);
+        const latitude = toTrimmedString(coordinates[1]);
+        return normalizeLocationCoordinate(`${longitude},${latitude}`);
+      } catch (error) {
+        throw new Error(`GSI address search failed: ${toErrorMessage(error)}`);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    })();
+
+    cache.set(cacheKey, requestPromise);
+    try {
+      return await requestPromise;
+    } catch (error) {
+      cache.delete(cacheKey);
+      throw error;
+    }
+  };
+
+  return { resolve };
+}
+
+function findMappingByFieldName(mappings, fieldName) {
+  const target = normalizeText(fieldName);
+  return (Array.isArray(mappings) ? mappings : []).find(
+    (mapping) => normalizeText(mapping.fieldName) === target
+  ) || null;
+}
+
+async function appendDerivedLocationField(
+  fields,
+  row,
+  valueMappings,
+  fieldMetaByName,
+  locationGeocoder,
+  previousFields
+) {
+  // 邮便番号 / 住所 已被映射时，自动派生位置字段，避免前端额外再配一条位置映射。
+  const locationMeta = fieldMetaByName.get(normalizeText('位置'));
+  if (!locationMeta || Number(locationMeta.type) !== FIELD_TYPE_LOCATION) return;
+  if (fields['位置'] !== undefined) return;
+
+  const postalMapping = findMappingByFieldName(valueMappings, '郵便番号');
+  const addressMapping = findMappingByFieldName(valueMappings, '住所');
+  if (!postalMapping && !addressMapping) return;
+
+  const postalCode = postalMapping ? toTrimmedString(row[postalMapping.csvColumn]) : '';
+  const address = addressMapping ? toTrimmedString(row[addressMapping.csvColumn]) : '';
+  const query = [postalCode, address].filter(Boolean).join(' ');
+  if (!query) return;
+
+  // Do not reuse old record coordinates for a new address string.
+  // The location field should be written only after the current address resolves to coordinates.
+  let coordinate = extractCoordinateHintFromRowValues(row);
+  let lastError = null;
+
+  if (!coordinate) {
+    const candidates = createPostalAddressQueryCandidates(postalCode, address);
+    for (const candidate of candidates) {
+      try {
+        coordinate = await locationGeocoder.resolve(candidate);
+        if (coordinate) break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+  }
+  if (!coordinate) {
+    const suffix = lastError ? ` (${toErrorMessage(lastError)})` : '';
+    throw new Error(`field "位置" could not geocode from 郵便番号/住所: ${query}${suffix}`);
+  }
+
+  // geocode 时可以使用“邮便番号 + 住所”的查询串，但写回位置字段时，
+  // address 使用纯地址，full_address 再保留完整展示串，避免提交冗余结构。
+  fields['位置'] = coordinate;
+}
+
+async function convertLocationFieldValue(
+  raw,
+  row,
+  fieldName,
+  previousCellValue,
+  locationGeocoder
+) {
+  const text = toTrimmedString(raw);
+  if (!text) return '';
+
+  const rowCoordinateHint = extractCoordinateHintFromRowValues(row);
+
+  try {
+    return buildLocationCellValue(text, previousCellValue, rowCoordinateHint);
+  } catch (error) {
+    const addressCandidate = extractAddressCandidateFromRawLocationInput(text);
+    if (!addressCandidate || !locationGeocoder || typeof locationGeocoder.resolve !== 'function') {
+      throw new Error(`field "${fieldName}" ${toErrorMessage(error)}`);
+    }
+
+    try {
+      const coordinate = await locationGeocoder.resolve(addressCandidate);
+      return coordinate;
+    } catch (geocodeError) {
+      throw new Error(
+        `field "${fieldName}" could not geocode "${addressCandidate}": ${toErrorMessage(geocodeError)}`
+      );
+    }
+  }
+}
+
 function isLinkField(meta) {
   if (!meta || typeof meta !== 'object') return false; // 元数据无效
   const property = meta.property; // 获取字段属性
@@ -705,6 +1188,9 @@ function toComparable(value) {
   if (typeof value === 'object') {
     // Bitable 的数式/富文本字段有时返回 { type, value: [...] } 包装对象
     // 这里优先递归展开 value，确保 key 比较使用真实文本，而不是整个对象的 JSON。
+    if ('location' in value || 'fullAddress' in value || 'full_address' in value) {
+      return locationToKeyPart(value);
+    }
     if ('value' in value) {
       return toComparable(value.value);
     }
@@ -1125,22 +1611,49 @@ function validateMappings(fieldNames, keyMappings, updateMappings, insertMapping
  * );
  * // 返回: { Name: 'John' }
  */
-function buildFieldsFromRow(row, valueMappings, clearEmpty, fieldMetaByName, linkResolvers) {
+async function buildFieldsFromRow(
+  row,
+  valueMappings,
+  clearEmpty,
+  fieldMetaByName,
+  linkResolvers,
+  locationGeocoder,
+  previousFields
+) {
   const fields = {};
-  valueMappings.forEach((mapping) => {
+  for (const mapping of valueMappings) {
     const raw = row[mapping.csvColumn];
     const trimmed = typeof raw === 'string' ? raw.trim() : String(raw || '').trim();
     if (!trimmed) {
       if (clearEmpty) fields[mapping.fieldName] = null;
-      return;
+      continue;
     }
     const fieldMeta = fieldMetaByName.get(normalizeText(mapping.fieldName));
     if (!fieldMeta) {
       fields[mapping.fieldName] = raw;
-      return;
+      continue;
+    }
+    if (Number(fieldMeta.type) === FIELD_TYPE_LOCATION) {
+      // Location fields use the dedicated builder so JSON/text/coordinate inputs follow one rule.
+      fields[mapping.fieldName] = await convertLocationFieldValue(
+        raw,
+        row,
+        mapping.fieldName,
+        previousFields && previousFields[mapping.fieldName],
+        locationGeocoder
+      );
+      continue;
     }
     fields[mapping.fieldName] = convertRawValue(raw, fieldMeta, mapping.fieldName, linkResolvers);
-  });
+  }
+  await appendDerivedLocationField(
+    fields,
+    row,
+    valueMappings,
+    fieldMetaByName,
+    locationGeocoder,
+    previousFields
+  );
   return fields;
 }
 
@@ -1214,16 +1727,46 @@ function buildFieldsForEmptyMode(row, valueMappings) {
  * );
  * // 返回: ['a001']
  */
-function buildKeyPartsFromRow(row, keyMappings, fieldMetaByName, linkResolvers) {
-  return keyMappings.map((mapping) => {
+async function buildKeyPartsFromRow(
+  row,
+  keyMappings,
+  fieldMetaByName,
+  linkResolvers,
+  locationGeocoder
+) {
+  const keyParts = [];
+
+  for (const mapping of keyMappings) {
     const raw = row[mapping.csvColumn];
     const trimmed =
       typeof raw === 'string' ? raw.trim() : String(raw === undefined ? '' : raw).trim();
-    if (!trimmed) return '';
+    if (!trimmed) {
+      keyParts.push('');
+      continue;
+    }
+
     const fieldMeta = fieldMetaByName.get(normalizeText(mapping.fieldName));
-    if (!fieldMeta) return toComparable(raw);
-    return toComparable(convertRawValue(raw, fieldMeta, mapping.fieldName, linkResolvers));
-  });
+    if (!fieldMeta) {
+      keyParts.push(toComparable(raw));
+      continue;
+    }
+
+    if (Number(fieldMeta.type) === FIELD_TYPE_LOCATION) {
+      const locationValue = await convertLocationFieldValue(
+        raw,
+        row,
+        mapping.fieldName,
+        null,
+        locationGeocoder
+      );
+      keyParts.push(toComparable(locationValue));
+      continue;
+    }
+
+    keyParts.push(toComparable(convertRawValue(raw, fieldMeta, mapping.fieldName, linkResolvers)));
+  }
+
+  return keyParts;
 }
 
 /**
@@ -1261,20 +1804,37 @@ function buildKeyPartsFromRow(row, keyMappings, fieldMetaByName, linkResolvers) 
  * );
  * // 返回: { Name: 'John', Code: 'A001' }
  */
-function buildInsertFieldsWithKey(row, keyMappings, currentFields, fieldMetaByName, linkResolvers) {
+async function buildInsertFieldsWithKey(
+  row,
+  keyMappings,
+  currentFields,
+  fieldMetaByName,
+  linkResolvers,
+  locationGeocoder
+) {
   const fields = { ...currentFields };
-  keyMappings.forEach((mapping) => {
-    if (fields[mapping.fieldName] !== undefined) return;
+  for (const mapping of keyMappings) {
+    if (fields[mapping.fieldName] !== undefined) continue;
     const raw = row[mapping.csvColumn];
     const trimmed = typeof raw === 'string' ? raw.trim() : String(raw || '').trim();
-    if (!trimmed) return;
+    if (!trimmed) continue;
     const fieldMeta = fieldMetaByName.get(normalizeText(mapping.fieldName));
     if (!fieldMeta) {
       fields[mapping.fieldName] = raw;
-      return;
+      continue;
+    }
+    if (Number(fieldMeta.type) === FIELD_TYPE_LOCATION) {
+      fields[mapping.fieldName] = await convertLocationFieldValue(
+        raw,
+        row,
+        mapping.fieldName,
+        null,
+        locationGeocoder
+      );
+      continue;
     }
     fields[mapping.fieldName] = convertRawValue(raw, fieldMeta, mapping.fieldName, linkResolvers);
-  });
+  }
   return fields;
 }
 
@@ -1341,6 +1901,7 @@ function shouldSkipBecauseNoWritableField(fields, clearEmpty) {
  * // result.recordIndex: Map { 'abc||#||123' => ['rec001'] }
  */
 async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, onProgress) {
+  const recordFieldsById = new Map();
   const recordIndex = new Map();      // 主键 -> 记录ID数组
   const seenPageTokens = new Set();   // 已见过的分页 token
   const seenRecordIds = new Set();    // 已见过的记录ID(去重)
@@ -1381,6 +1942,7 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
 
       // 提取主键字段值
       const fields = item.fields || {};
+      recordFieldsById.set(recordId, fields);
       const keyParts = keyMappings.map((mapping) => toComparable(fields[mapping.fieldName]));
 
       // 跳过包含空主键的记录
@@ -1440,7 +2002,7 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
     pageToken = pageDecision.nextPageToken;
   }
 
-  return { recordIndex, indexedCount, scannedCount, duplicateCount };
+  return { recordIndex, recordFieldsById, indexedCount, scannedCount, duplicateCount };
 }
 
 /**
@@ -1468,6 +2030,7 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
  * );
  */
 async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMappings, stats, onProgress) {
+  const recordFieldsById = new Map();
   const recordIndex = new Map();
   const seenPageTokens = new Set();
   const seenRecordIds = new Set();
@@ -1504,6 +2067,7 @@ async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMapp
 
       // 提取主键字段值
       const fields = item.fields || {};
+      recordFieldsById.set(recordId, fields);
       const keyParts = keyMappings.map((mapping) => toComparable(fields[mapping.fieldName]));
 
       // 跳过包含空主键的记录
@@ -1562,7 +2126,7 @@ async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMapp
     pageToken = pageDecision.nextPageToken;
   }
 
-  return { recordIndex, indexedCount, scannedCount, duplicateCount };
+  return { recordIndex, recordFieldsById, indexedCount, scannedCount, duplicateCount };
 }
 
 /**
@@ -1648,8 +2212,14 @@ async function flushUpdateBatch(ctx, forceSingle = false) {
 
     // 多条记录,批量提交
     try {
+      console.log(
+        'update batch:::::::::::::::::' + JSON.stringify(requestRecords)
+      );
       await client.batchUpdateRecords(appToken, tableId, requestRecords);
       stats.updatedRows += chunk.length;
+      console.log(
+        'update batch success (' + chunk.length + ') ' + stats.updatedRows
+      );
     } catch (error) {
       // 批量失败,回退到单条提交
       logMessage(
@@ -1865,7 +2435,15 @@ async function flushInsertBatch(ctx, forceSingle = false) {
  *   params, stats, recordIndex, insertBatch, updateBatch, rowCounterRef
  * );
  */
-function createClientContext(params, stats, recordIndex, insertBatch, updateBatch, rowCounterRef) {
+function createClientContext(
+  params,
+  stats,
+  recordIndex,
+  recordFieldsById,
+  insertBatch,
+  updateBatch,
+  rowCounterRef
+) {
   // 保存进度函数
   const saveProgress = () => {
     if (!params.checkpointPath) return; // 未配置检查点路径,跳过
@@ -1889,6 +2467,7 @@ function createClientContext(params, stats, recordIndex, insertBatch, updateBatc
     batchSize: params.batchSize || 500,
     stats,
     recordIndex,
+    recordFieldsById,
     pendingInsertByKey: params.pendingInsertByKey,
     insertBatch,
     updateBatch,
@@ -2070,6 +2649,7 @@ async function runSync(params) {
   }
 
   let recordIndex = new Map();
+  let recordFieldsById = new Map();
   if (mode !== MODE_INSERT) {
     logMessage('[index] building key index from existing records...\n');
     emitProgress(onProgress, {
@@ -2110,6 +2690,7 @@ async function runSync(params) {
       );
     }
     recordIndex = indexResult.recordIndex;
+    recordFieldsById = indexResult.recordFieldsById || new Map();
     stats.indexedRows = indexResult.indexedCount;
     logMessage(
       `[index] done, scanned ${indexResult.scannedCount} unique records, indexed ${stats.indexedRows}` +
@@ -2141,10 +2722,12 @@ async function runSync(params) {
     },
     stats,
     recordIndex,
+    recordFieldsById,
     insertBatch,
     updateBatch,
     rowCounterRef
   );
+  const locationGeocoder = createJapanAddressGeocoder();
 
   let lastProgressRow = stats.processedRows;
   let lastProgressAt = 0;
@@ -2227,12 +2810,14 @@ async function runSync(params) {
 
     try {
       if (mode === MODE_INSERT) {
-        const insertOnlyFields = buildFieldsFromRow(
+        const insertOnlyFields = await buildFieldsFromRow(
           row,
           effectiveInsertMappings,
           false,
           fieldMetaByName,
-          linkResolvers
+          linkResolvers,
+          locationGeocoder,
+          null
         );
         if (Object.keys(insertOnlyFields).length === 0) {
           stats.skippedRows += 1;
@@ -2245,11 +2830,12 @@ async function runSync(params) {
           rowData: { ...row },
         });
       } else {
-        const keyParts = buildKeyPartsFromRow(
+        const keyParts = await buildKeyPartsFromRow(
           row,
           keyMappings,
           fieldMetaByName,
-          linkResolvers
+          linkResolvers,
+          locationGeocoder
         );
         if (hasEmptyKeyPart(keyParts)) {
           pushFailure(stats, rowCounterRef.value, 'キー値が空です', row);
@@ -2293,12 +2879,15 @@ async function runSync(params) {
           continue;
         }
 
-        const updateFields = buildFieldsFromRow(
+        const previousFields = recordId ? ctx.recordFieldsById.get(recordId) : null;
+        const updateFields = await buildFieldsFromRow(
           row,
           effectiveUpdateMappings,
           false,
           fieldMetaByName,
-          linkResolvers
+          linkResolvers,
+          locationGeocoder,
+          previousFields
         );
         if (shouldSkipBecauseNoWritableField(updateFields, false)) {
           stats.skippedRows += 1;
@@ -2310,19 +2899,22 @@ async function runSync(params) {
             continue;
           }
 
-          const insertCandidate = buildFieldsFromRow(
+          const insertCandidate = await buildFieldsFromRow(
             row,
             effectiveInsertMappings,
             false,
             fieldMetaByName,
-            linkResolvers
+            linkResolvers,
+            locationGeocoder,
+            null
           );
-          const insertFields = buildInsertFieldsWithKey(
+          const insertFields = await buildInsertFieldsWithKey(
             row,
             keyMappings,
             insertCandidate,
             fieldMetaByName,
-            linkResolvers
+            linkResolvers,
+            locationGeocoder
           );
           if (Object.keys(insertFields).length === 0) {
             stats.skippedRows += 1;
