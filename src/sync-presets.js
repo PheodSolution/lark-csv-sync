@@ -77,8 +77,8 @@ const PRESETS = [
   // 预设1: 使用量数据同步
   {
     id: 'usage',                    // 预设ID
-    name: '使用量',                 // 预设名称
-    keyword: '使用量',              // 文件名关键词
+    name: '使用量・料金',                 // 预设名称
+    keyword: '使用量・料金',              // 文件名关键词
     mode: 'update',                 // 同步模式:仅更新
     tableName: '顧客管理',          // 目标表名
 
@@ -89,33 +89,15 @@ const PRESETS = [
 
     // 更新字段映射:更新时写入的字段
     updateMappings: [
-      { fieldName: '今年度使用量平均', csvColumn: '今年度使用量平均' }
+      { fieldName: '今年度使用量平均', csvColumn: '今年度使用量平均' },
+      { fieldName: '今年度料金平均', csvColumn: '今年度使用料金平均' }
     ],
 
     // 新增字段映射:空数组(update 模式不新增记录)
     insertMappings: [],
   },
 
-  // 预设2: 料金(费用)数据同步
-  {
-    id: 'price',
-    name: '料金',
-    keyword: '料金',
-    mode: 'update',
-    tableName: '顧客管理',
-
-    keyMappings: [
-      { fieldName: '需要家コード', csvColumn: '需要家コード' }
-    ],
-
-    updateMappings: [
-      { fieldName: '今年度料金平均', csvColumn: '今年度使用料金平均' }
-    ],
-
-    insertMappings: [],
-  },
-
-  // 预设3: 所有器具(设备)数据同步
+  // 预设2: 所有器具(设备)数据同步
   {
     id: 'all-devices',
     name: '所有器具',
@@ -159,7 +141,7 @@ const PRESETS = [
     ],
   },
 
-  // 预设4: 购入履歴(购买历史)数据同步
+  // 预设3: 购入履歴(购买历史)数据同步
   {
     id: 'purchase-history',
     name: '購入履歴',
@@ -193,7 +175,7 @@ const PRESETS = [
     ],
   },
 
-  // 预设5: 新設/器具(月別予算)数据同步
+  // 预设4: 新設/器具(月別予算)数据同步
   {
     id: 'new-install-devices-budget',
     name: '新設/器具',
@@ -227,7 +209,7 @@ const PRESETS = [
     ],
   },
 
-  // 预设6: (内)給湯器(月別予算)数据同步
+  // 预设5: (内)給湯器(月別予算)数据同步
   // 注意: 该关键词比 "給湯器" 更具体,必须放在前面以避免被先匹配
   {
     id: 'inner-water-heater-budget',
@@ -249,7 +231,7 @@ const PRESETS = [
       { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
       { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
       { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
-      { fieldName: 'エアバブル_予算（台）', csvColumn: '（内）エアバブル_予算' },
+      { fieldName: 'エアバブル_予算（台）', csvColumn: '(内)エアバブル_予算' },
     ],
 
     // 新增字段映射:ID 会在 upsert 插入分支中由 keyMappings 自动补齐
@@ -260,11 +242,11 @@ const PRESETS = [
       { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
       { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
       { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
-      { fieldName: 'エアバブル_予算（台）', csvColumn: '（内）エアバブル_予算' },
+      { fieldName: 'エアバブル_予算（台）', csvColumn: '(内)エアバブル_予算' },
     ],
   },
 
-  // 预设7: 給湯器(月別予算)数据同步
+  // 预设6: 給湯器(月別予算)数据同步
   {
     id: 'water-heater-budget',
     name: '給湯器',
@@ -302,7 +284,7 @@ const PRESETS = [
     ],
   },
 
-  // 预设8: 重点商品(月別予算)数据同步
+  // 预设7: 重点商品(月別予算)数据同步
   {
     id: 'featured-products-budget',
     name: '重点商品',
@@ -370,7 +352,7 @@ const PRESETS = [
     ],
   },
 
-  // 预设9: リフォーム予算(リフォーム担当者予算)数据同步
+  // 预设8: リフォーム予算(リフォーム担当者予算)数据同步
   // 注意: 该关键词比 "予算" 更具体,必须放在前面以避免被先匹配
   {
     id: 'reform-budget',
@@ -449,100 +431,7 @@ const PRESETS = [
     ],
   },
 
-  // 预设10: 予算(月別予算)数据同步
-  // 注意: 该关键词比较宽泛,必须放在更具体的月別予算预设后面以避免被先匹配
-  {
-    id: 'monthly-budget',
-    name: '予算',
-    keyword: '予算',
-    mode: 'upsert',
-    tableName: '月別予算',
-
-    // Key: ID(文本字段) <- CSV ID
-    keyMappings: [
-      { fieldName: 'ID', csvColumn: 'ID' },
-    ],
-
-    // 更新字段映射:更新时写入整套月別予算字段
-    updateMappings: [
-      { fieldName: '予算日付', csvColumn: '予算日付' },
-      { fieldName: '事業所', csvColumn: '事業所コード' },
-      { fieldName: '従業員', csvColumn: '従業員コード' },
-      { fieldName: '器具売上高_予算', csvColumn: '器具売上高' },
-      { fieldName: '器具利益_予算', csvColumn: '器具利益' },
-      { fieldName: '新設件数', csvColumn: '新設件数' },
-      { fieldName: '燃転_予算（台）', csvColumn: '燃転_予算' },
-      { fieldName: '買替_予算（台）', csvColumn: '買替_予算' },
-      { fieldName: '風呂切替_予算（台）', csvColumn: '風呂切替_予算' },
-      { fieldName: '新設_予算（台）', csvColumn: '新設_予算' },
-      { fieldName: 'その他_予算（台）', csvColumn: 'その他_予算' },
-      { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
-      { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
-      { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
-      { fieldName: 'エアバブル_予算（台）', csvColumn: '（内）エアバブル_予算' },
-      { fieldName: '浴暖_予算（台）', csvColumn: '浴室暖房_予算' },
-      { fieldName: 'レンジフード_予算（台）', csvColumn: 'レンジフード_予算' },
-      { fieldName: 'ビルトイン_予算（台）', csvColumn: 'GTビルトインコンロ_予算' },
-      { fieldName: '卓上_予算（台）', csvColumn: 'GT卓上_予算' },
-      { fieldName: '暖房機_予算（台）', csvColumn: '暖房機_予算' },
-      { fieldName: 'GHP_予算（台）', csvColumn: 'GHP_予算' },
-      { fieldName: '蓄電池_予算（台）', csvColumn: '蓄電池_予算' },
-      { fieldName: '衣類乾燥機_予算（台）', csvColumn: '衣類乾燥機_予算' },
-      { fieldName: '床暖_予算（台）', csvColumn: '床暖房_予算' },
-      { fieldName: 'リフォーム_予算（台）', csvColumn: 'リフォーム情報_予算' },
-      { fieldName: 'PPA_予算', csvColumn: 'PPA_予算' },
-      { fieldName: 'リターナブル_予算', csvColumn: 'リターナブル_予算' },
-      { fieldName: 'ワンウェイ_予算', csvColumn: 'ワンウェイ_予算' },
-      { fieldName: '電力_予算', csvColumn: '電力_予算' },
-      { fieldName: 'サポテン_予算', csvColumn: 'サポテン_予算' },
-      { fieldName: 'マイページ_予算', csvColumn: 'マイページ_予算' },
-      { fieldName: 'ハウスクリーニング_予算', csvColumn: 'ハウスクリーニング_予算' },
-      { fieldName: '太陽光_予算（台）', csvColumn: '太陽光発電_予算' },
-      { fieldName: 'エネファーム_予算（台）', csvColumn: 'エネファーム_予算' },
-      { fieldName: '新都市ガス_予算', csvColumn: '新都市ガス_予算' },
-    ],
-
-    // 新增字段映射:ID 会在 upsert 插入分支中由 keyMappings 自动补齐
-    insertMappings: [
-      { fieldName: '予算日付', csvColumn: '予算日付' },
-      { fieldName: '事業所', csvColumn: '事業所コード' },
-      { fieldName: '従業員', csvColumn: '従業員コード' },
-      { fieldName: '器具売上高_予算', csvColumn: '器具売上高' },
-      { fieldName: '器具利益_予算', csvColumn: '器具利益' },
-      { fieldName: '新設件数', csvColumn: '新設件数' },
-      { fieldName: '燃転_予算（台）', csvColumn: '燃転_予算' },
-      { fieldName: '買替_予算（台）', csvColumn: '買替_予算' },
-      { fieldName: '風呂切替_予算（台）', csvColumn: '風呂切替_予算' },
-      { fieldName: '新設_予算（台）', csvColumn: '新設_予算' },
-      { fieldName: 'その他_予算（台）', csvColumn: 'その他_予算' },
-      { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
-      { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
-      { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
-      { fieldName: 'エアバブル_予算（台）', csvColumn: '（内）エアバブル_予算' },
-      { fieldName: '浴暖_予算（台）', csvColumn: '浴室暖房_予算' },
-      { fieldName: 'レンジフード_予算（台）', csvColumn: 'レンジフード_予算' },
-      { fieldName: 'ビルトイン_予算（台）', csvColumn: 'GTビルトインコンロ_予算' },
-      { fieldName: '卓上_予算（台）', csvColumn: 'GT卓上_予算' },
-      { fieldName: '暖房機_予算（台）', csvColumn: '暖房機_予算' },
-      { fieldName: 'GHP_予算（台）', csvColumn: 'GHP_予算' },
-      { fieldName: '蓄電池_予算（台）', csvColumn: '蓄電池_予算' },
-      { fieldName: '衣類乾燥機_予算（台）', csvColumn: '衣類乾燥機_予算' },
-      { fieldName: '床暖_予算（台）', csvColumn: '床暖房_予算' },
-      { fieldName: 'リフォーム_予算（台）', csvColumn: 'リフォーム情報_予算' },
-      { fieldName: 'PPA_予算', csvColumn: 'PPA_予算' },
-      { fieldName: 'リターナブル_予算', csvColumn: 'リターナブル_予算' },
-      { fieldName: 'ワンウェイ_予算', csvColumn: 'ワンウェイ_予算' },
-      { fieldName: '電力_予算', csvColumn: '電力_予算' },
-      { fieldName: 'サポテン_予算', csvColumn: 'サポテン_予算' },
-      { fieldName: 'マイページ_予算', csvColumn: 'マイページ_予算' },
-      { fieldName: 'ハウスクリーニング_予算', csvColumn: 'ハウスクリーニング_予算' },
-      { fieldName: '太陽光_予算（台）', csvColumn: '太陽光発電_予算' },
-      { fieldName: 'エネファーム_予算（台）', csvColumn: 'エネファーム_予算' },
-      { fieldName: '新都市ガス_予算', csvColumn: '新都市ガス_予算' },
-    ],
-  },
-
-  // 预设11: 中止防止受付(中止受付情報)数据同步
+  // 预设9: 中止防止受付(中止受付情報)数据同步
   {
     id: 'service-stop-prevention',
     name: '中止防止受付',
@@ -572,7 +461,7 @@ const PRESETS = [
     ],
   },
 
-  // 预设12: イベント目標(イベント目標)数据同步
+  // 预设10: イベント目標(イベント目標)数据同步
   {
     id: 'event-target',
     name: 'イベント目標',
@@ -594,9 +483,9 @@ const PRESETS = [
       { fieldName: '当日目標_利益', csvColumn: '当日目標_利益' },
       { fieldName: 'フォロー目標_高', csvColumn: 'フォロー目標_高' },
       { fieldName: 'フォロー目標_利益', csvColumn: 'フォロー目標_利益' },
-      // { fieldName: '当日報告_高', csvColumn: '当日報告_高' },
-      // { fieldName: '当日報告_利益', csvColumn: '当日報告_利益' },
-      { fieldName: '会場名', csvColumn: '会場名【イベントにより変動】' },
+      { fieldName: '当日報告_高', csvColumn: '当日報告_高' },
+      { fieldName: '当日報告_利益', csvColumn: '当日報告_利益' },
+      { fieldName: '会場名', csvColumn: '会場名' }, // 特殊处理，包含会場名【イベントにより変動】
       { fieldName: '開催時期', csvColumn: '開催時期' },
       { fieldName: 'きっかけ', csvColumn: 'きっかけ' },
     ],
@@ -610,15 +499,15 @@ const PRESETS = [
       { fieldName: '当日目標_利益', csvColumn: '当日目標_利益' },
       { fieldName: 'フォロー目標_高', csvColumn: 'フォロー目標_高' },
       { fieldName: 'フォロー目標_利益', csvColumn: 'フォロー目標_利益' },
-      // { fieldName: '当日報告_高', csvColumn: '当日報告_高' },
-      // { fieldName: '当日報告_利益', csvColumn: '当日報告_利益' },
-      { fieldName: '会場名', csvColumn: '会場名【イベントにより変動】' },
+      { fieldName: '当日報告_高', csvColumn: '当日報告_高' },
+      { fieldName: '当日報告_利益', csvColumn: '当日報告_利益' },
+      { fieldName: '会場名', csvColumn: '会場名' }, // 特殊处理，包含会場名【イベントにより変動】
       { fieldName: '開催時期', csvColumn: '開催時期' },
       { fieldName: 'きっかけ', csvColumn: 'きっかけ' },
     ],
   },
 
-  // 预设13: 大家顧客登録(顧客管理)数据同步
+  // 预设11: 大家顧客登録(顧客管理)数据同步
   {
     id: 'landlord-customer-registration',
     name: '大家顧客登録',
@@ -633,7 +522,7 @@ const PRESETS = [
 
     // 更新字段映射:更新时写入大家/顧客基础信息
     updateMappings: [
-      { fieldName: '大家★電話番号', csvColumn: '大家★電話番号　' }, // CSV 原列名末尾可能带全角空格
+      { fieldName: '大家★電話番号', csvColumn: '大家★電話番号' }, // CSV 原列名末尾可能带全角空格
       { fieldName: '顧客名', csvColumn: '顧客名' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 该列填写的是事業所名
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
@@ -643,7 +532,7 @@ const PRESETS = [
     // 新增字段映射:新增时写入 Key 字段和基础信息
     insertMappings: [
       { fieldName: '大家コード★', csvColumn: '大家コード★' },
-      { fieldName: '大家★電話番号', csvColumn: '大家★電話番号　' }, // CSV 原列名末尾可能带全角空格
+      { fieldName: '大家★電話番号', csvColumn: '大家★電話番号' }, // CSV 原列名末尾可能带全角空格
       { fieldName: '顧客名', csvColumn: '顧客名' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 该列填写的是事業所名
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
@@ -651,7 +540,7 @@ const PRESETS = [
     ],
   },
 
-  // 预设14: 物件情報(集合物件情報)数据同步
+  // 预设12: 物件情報(集合物件情報)数据同步
   {
     id: 'property-information',
     name: '物件情報',
@@ -674,14 +563,14 @@ const PRESETS = [
     // 新增字段映射:新增时写入 Key 字段、关联字段和物件基础信息
     insertMappings: [
       { fieldName: '需要家コード', csvColumn: '需要家コード' },
-      { fieldName: '大家★電話番号', csvColumn: '大家★電話番号　' }, // CSV 原列名末尾可能带全角空格
+      { fieldName: '大家★電話番号', csvColumn: '大家★電話番号' }, // CSV 原列名末尾可能带全角空格
       { fieldName: '顧客関連', csvColumn: '顧客名' },
       { fieldName: '物件名', csvColumn: '物件名' },
       { fieldName: '物件住所', csvColumn: '物件住所' },
     ],
   },
 
-  // 预设15: 中止インポート(顧客管理)数据同步
+  // 预设13: 中止インポート(顧客管理)数据同步
   {
     id: 'cancellation-import',
     name: '中止インポート',
@@ -704,7 +593,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设16: 大家管理会社情報(大家・管理会社情報)数据同步
+  // 预设14: 大家管理会社情報(大家・管理会社情報)数据同步
   {
     id: 'landlord-management-company-information',
     name: '大家管理会社情報',
@@ -738,7 +627,7 @@ const PRESETS = [
     ],
   },
 
-  // 预设17: 空インポート_TGL(顧客管理)数据同步
+  // 预设15: 空インポート_TGL(顧客管理)数据同步
   // 注意: 该关键词比 "TGL" 更具体,必须放在前面以避免被先匹配
   {
     id: 'empty-import-tgl',
@@ -754,7 +643,7 @@ const PRESETS = [
 
     // 更新字段映射:empty 模式下这些字段会在匹配成功后被清空
     updateMappings: [
-      { fieldName: '顧客名', csvColumn: '顧客名' },
+      // { fieldName: '顧客名', csvColumn: '顧客名' },
       { fieldName: 'コンロスコア', csvColumn: 'コンロスコア' },
       { fieldName: '給湯器スコア', csvColumn: '給湯器スコア' },
       { fieldName: '年齢', csvColumn: '年齢' },
@@ -766,7 +655,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设18: TGL(顧客管理)数据同步
+  // 预设16: TGL(顧客管理)数据同步
   {
     id: 'tgl',
     name: 'TGL',
@@ -793,7 +682,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设19: マイページ情報(顧客管理)数据同步
+  // 预设17: マイページ情報(顧客管理)数据同步
   {
     id: 'mypage-information',
     name: 'マイページ情報',
@@ -818,7 +707,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设20: イベント来場履歴_需要家コード(顧客管理)数据同步
+  // 预设18: イベント来場履歴_需要家コード(顧客管理)数据同步
   {
     id: 'event-visit-history-by-customer-code',
     name: 'イベント来場履歴_需要家コード',
@@ -843,7 +732,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设21: イベント来場履歴_統合ID(顧客管理)数据同步
+  // 预设19: イベント来場履歴_統合ID(顧客管理)数据同步
   {
     id: 'event-visit-history-by-unified-id',
     name: 'イベント来場履歴_統合ID',
@@ -868,7 +757,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设22: 空インポート_TLC情報(顧客管理)数据同步
+  // 预设20: 空インポート_TLC情報(顧客管理)数据同步
   // 注意: 该关键词比 "TLC情報" 更具体,必须放在前面以避免被先匹配
   {
     id: 'empty-import-tlc-information',
@@ -884,7 +773,7 @@ const PRESETS = [
 
     // 更新字段映射:empty 模式下这些字段会在匹配成功后被清空
     updateMappings: [
-      // { fieldName: '統合ID', csvColumn: '統合ID' },
+      { fieldName: '統合ID', csvColumn: '統合ID' },
       { fieldName: 'TLC会員ID', csvColumn: 'TLC会員ID' },
       { fieldName: '利用可能ポイント数', csvColumn: '利用可能ポイント数' },
       { fieldName: 'TLCポイントデータ更新日', csvColumn: 'TLCポイントデータ更新日' },
@@ -897,7 +786,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设23: TLC情報(顧客管理)数据同步
+  // 预设21: TLC情報(顧客管理)数据同步
   {
     id: 'tlc-information',
     name: 'TLC情報',
@@ -925,7 +814,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设24: 空インポート_他社グループ顧客(顧客管理)数据同步
+  // 预设22: 空インポート_他社グループ顧客(顧客管理)数据同步
   // 注意: 该关键词比 "他社グループ顧客" 更具体,必须放在前面以避免被先匹配
   {
     id: 'empty-import-other-group-customer',
@@ -941,13 +830,13 @@ const PRESETS = [
 
     // 更新字段映射:empty 模式下这些字段会在匹配成功后被清空
     updateMappings: [
-      { fieldName: '顧客名', csvColumn: '顧客名' },
-      { fieldName: '顧客名（カナ）', csvColumn: '顧客名（カナ）' },
+      // { fieldName: '顧客名', csvColumn: '顧客名' },
+      // { fieldName: '顧客名（カナ）', csvColumn: '顧客名（カナ）' },
       { fieldName: '住所', csvColumn: '住所' },
       { fieldName: '建物名', csvColumn: '建物名' },
-      { fieldName: '戸建・集合（潜在顧客のみ）', csvColumn: '戸建・集合（潜在顧客のみ）' },
+      { fieldName: '戸建・集合（潜在顧客のみ）', csvColumn: '戸建・集合' },
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
-      { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
+      // { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 同一个 CSV 列同时写入担当者和担当部署
       { fieldName: '年齢', csvColumn: '年齢' },
       { fieldName: 'TKアクア', csvColumn: 'TKアクア' },
@@ -957,14 +846,14 @@ const PRESETS = [
       { fieldName: '失効予定ポイント数', csvColumn: '失効予定ポイント数' },
       { fieldName: 'ポイント直近失効日', csvColumn: 'ポイント直近失効日' },
       { fieldName: '利用可能ポイント数', csvColumn: '利用可能ポイント数' },
-      { fieldName: '他社サービス更新日', csvColumn: '他社サービス更新日' },
+      { fieldName: '他社サービス更新日', csvColumn: '他サービス更新日' },
     ],
 
     // 新增字段映射:空数组(empty 模式不新增记录)
     insertMappings: [],
   },
 
-  // 预设25: 他社グループ顧客(顧客管理)数据同步
+  // 预设23: 他社グループ顧客(顧客管理)数据同步
   {
     id: 'other-group-customer',
     name: '他社グループ顧客',
@@ -983,9 +872,9 @@ const PRESETS = [
       { fieldName: '顧客名（カナ）', csvColumn: '顧客名（カナ）' },
       { fieldName: '住所', csvColumn: '住所' },
       { fieldName: '建物名', csvColumn: '建物名' },
-      { fieldName: '戸建・集合（潜在顧客のみ）', csvColumn: '戸建・集合（潜在顧客のみ）' },
+      { fieldName: '戸建・集合（潜在顧客のみ）', csvColumn: '戸建・集合' },
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
-      { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
+      // { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 同一个 CSV 列同时写入担当者和担当部署
       { fieldName: '年齢', csvColumn: '年齢' },
       { fieldName: 'TKアクア', csvColumn: 'TKアクア' },
@@ -995,7 +884,7 @@ const PRESETS = [
       { fieldName: '失効予定ポイント数', csvColumn: '失効予定ポイント数' },
       { fieldName: 'ポイント直近失効日', csvColumn: 'ポイント直近失効日' },
       { fieldName: '利用可能ポイント数', csvColumn: '利用可能ポイント数' },
-      { fieldName: '他社サービス更新日', csvColumn: '他社サービス更新日' },
+      { fieldName: '他社サービス更新日', csvColumn: '他サービス更新日' },
     ],
 
     // 新增字段映射:新增时写入 Key 字段和基础信息
@@ -1005,9 +894,9 @@ const PRESETS = [
       { fieldName: '顧客名（カナ）', csvColumn: '顧客名（カナ）' },
       { fieldName: '住所', csvColumn: '住所' },
       { fieldName: '建物名', csvColumn: '建物名' },
-      { fieldName: '戸建集合（潜在顧客のみ）', csvColumn: '戸建・集合（潜在顧客のみ）' },
+      { fieldName: '戸建・集合（潜在顧客のみ）', csvColumn: '戸建・集合' },
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
-      { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
+      // { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 同一个 CSV 列同时写入担当者和担当部署
       { fieldName: '年齢', csvColumn: '年齢' },
       { fieldName: 'TKアクア', csvColumn: 'TKアクア' },
@@ -1017,11 +906,11 @@ const PRESETS = [
       { fieldName: '失効予定ポイント数', csvColumn: '失効予定ポイント数' },
       { fieldName: 'ポイント直近失効日', csvColumn: 'ポイント直近失効日' },
       { fieldName: '利用可能ポイント数', csvColumn: '利用可能ポイント数' },
-      { fieldName: '他社サービス更新日', csvColumn: '他社サービス更新日' },
+      { fieldName: '他社サービス更新日', csvColumn: '他サービス更新日' },
     ],
   },
 
-  // 预设26: 空インポート_在宅見込情報(在宅見込情報)数据同步
+  // 预设24: 空インポート_在宅見込情報(在宅見込情報)数据同步
   // 注意: 该关键词比 "在宅見込情報" 更具体,必须放在前面以避免被先匹配
   {
     id: 'empty-import-at-home-prospect-information',
@@ -1066,7 +955,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设27: 在宅見込情報(在宅見込情報)数据同步
+  // 预设25: 在宅見込情報(在宅見込情報)数据同步
   {
     id: 'at-home-prospect-information',
     name: '在宅見込情報',
@@ -1110,7 +999,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设28: ゼンリン顧客データ(顧客管理)数据同步
+  // 预设26: ゼンリン顧客データ(顧客管理)数据同步
   {
     id: 'zenrin-customer-data',
     name: 'ゼンリン顧客データ',
@@ -1129,7 +1018,7 @@ const PRESETS = [
       { fieldName: '顧客名', csvColumn: '顧客名' },
       { fieldName: '住所', csvColumn: '住所' },
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
-      { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
+      // { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 同一个 CSV 列同时写入担当者和担当部署
       // { fieldName: '電話番号', csvColumn: '電話番号' },
       { fieldName: '他社情報', csvColumn: '他社情報' },
@@ -1143,15 +1032,15 @@ const PRESETS = [
       { fieldName: '顧客名', csvColumn: '顧客名' },
       { fieldName: '住所', csvColumn: '住所' },
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
-      { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
+      // { fieldName: '自社担当者1(主担当)', csvColumn: '主担当（自社担当部署）' },
       { fieldName: '自社担当部署1(主担当)', csvColumn: '主担当（自社担当部署）' }, // 同一个 CSV 列同时写入担当者和担当部署
-      { fieldName: '電話番号', csvColumn: '電話番号' },
+      // { fieldName: '電話番号', csvColumn: '電話番号' },
       { fieldName: '他社情報', csvColumn: '他社情報' },
       { fieldName: 'その他会社名', csvColumn: 'その他会社名' },
     ],
   },
 
-  // 预设29: DM履歴(顧客管理)数据同步
+  // 预设27: DM履歴(顧客管理)数据同步
   {
     id: 'dm-history',
     name: 'DM履歴',
@@ -1174,7 +1063,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设30: 自社担当者(顧客管理)数据同步
+  // 预设28: 自社担当者(顧客管理)数据同步
   {
     id: 'internal-person-in-charge',
     name: '自社担当者',
@@ -1197,7 +1086,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设31: 営利評価(顧客管理)数据同步
+  // 预设29: 営利評価(顧客管理)数据同步
   {
     id: 'profitability-evaluation',
     name: '営利評価',
@@ -1220,7 +1109,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设32: 案件(案件管理)数据同步
+  // 预设30: 案件(案件管理)数据同步
   {
     id: 'project-management',
     name: '案件',
@@ -1266,8 +1155,12 @@ const PRESETS = [
       { fieldName: '商品名', csvColumn: '商品名（商品）' },
       { fieldName: '成約理由', csvColumn: '成約理由' },
       { fieldName: '成約理由詳細', csvColumn: '成約理由詳細' },
-      { fieldName: '敗戦理由(リフォーム)', csvColumn: '敗戦理由(リフォーム)' },
+      { fieldName: '敗戦理由(リフォーム)', csvColumn: '敗戦理由（リフォーム）' },
       { fieldName: '敗戦理由詳細', csvColumn: '敗戦理由詳細' },
+      { fieldName: '成約金額(千円)', csvColumn: '成約金額(千円)' },
+      { fieldName: '成約利益(千円)', csvColumn: '成約利益(千円)' },
+      { fieldName: '売上金額(千円)', csvColumn: '売上金額(千円)' },
+      { fieldName: '売上利益(千円)', csvColumn: '売上利益(千円)' },
     ],
 
     // 新增字段映射:需求未单独列出时,按现有 upsert 规则复用更新字段
@@ -1303,10 +1196,44 @@ const PRESETS = [
       { fieldName: '成約理由詳細', csvColumn: '成約理由詳細' },
       { fieldName: '敗戦理由(リフォーム)', csvColumn: '敗戦理由（リフォーム）' },
       { fieldName: '敗戦理由詳細', csvColumn: '敗戦理由詳細' },
+      { fieldName: '成約金額(千円)', csvColumn: '成約金額(千円)' },
+      { fieldName: '成約利益(千円)', csvColumn: '成約利益(千円)' },
+      { fieldName: '売上金額(千円)', csvColumn: '売上金額(千円)' },
+      { fieldName: '売上利益(千円)', csvColumn: '売上利益(千円)' },
     ],
   },
 
-  // 预设33: 新設他社情報更新(顧客管理)数据同步
+  // 预设31: リフォーム按分数据同步
+  {
+    id: 'allocation',
+    name: '按分',
+    keyword: '按分',
+    mode: 'upsert',
+    tableName: 'リフォーム按分',
+
+    // 复合 Key: ID + 案件コード
+    keyMappings: [
+      { fieldName: 'ID', csvColumn: 'ID' },
+      { fieldName: '案件コード', csvColumn: '案件紐づけ' },
+    ],
+
+    // 更新字段映射:更新时写入基础信息
+    updateMappings: [
+      { fieldName: '種別', csvColumn: '種別' },
+      { fieldName: '社員氏名', csvColumn: '社員氏名' },
+      { fieldName: '割合', csvColumn: '割合' },
+    ],
+
+    // 新增字段映射:需求未单独列出时,按现有 upsert 规则复用更新字段
+    insertMappings: [
+      { fieldName: '案件', csvColumn: '案件紐づけ' },
+      { fieldName: '種別', csvColumn: '種別' },
+      { fieldName: '社員氏名', csvColumn: '社員氏名' },
+      { fieldName: '割合', csvColumn: '割合' },
+    ],
+  },
+
+  // 预设32: 新設他社情報更新(顧客管理)数据同步
   {
     id: 'new-install-other-company-info-update',
     name: '新設他社情報更新',
@@ -1329,7 +1256,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设34: 顧客情報更新(顧客管理)数据同步
+  // 预设33: 顧客情報更新(顧客管理)数据同步
   {
     id: 'customer-information-update',
     name: '顧客情報更新',
@@ -1353,7 +1280,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设35: 空インポート_安心補償付き対象リスト(顧客管理)数据同步
+  // 预设34: 空インポート_安心補償付き対象リスト(顧客管理)数据同步
   // 注意: 该关键词比 "安心補償付き対象リスト" 更具体,必须放在前面以避免被先匹配
   {
     id: 'empty-import-safety-compensation-target-list',
@@ -1377,7 +1304,7 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设36: 安心補償付き対象リスト(顧客管理)数据同步
+  // 预设35: 安心補償付き対象リスト(顧客管理)数据同步
   {
     id: 'safety-compensation-target-list',
     name: '安心補償付き対象リスト',
@@ -1400,12 +1327,12 @@ const PRESETS = [
     insertMappings: [],
   },
 
-  // 预设37: 部署情報(事業所マスタ)数据同步
+  // 预设36: 部署情報(事業所マスタ)数据同步
   {
     id: 'department-information',
     name: '部署情報',
     keyword: '部署情報',
-    mode: 'insert',
+    mode: 'upsert',
     tableName: '事業所マスタ',
 
     // Key 字段映射:空数组(insert 模式不需要 Key)
@@ -1416,7 +1343,7 @@ const PRESETS = [
     // 更新字段映射:空数组(insert 模式不更新已有记录)
     updateMappings: [
       { fieldName: '事務所名', csvColumn: '部署' },
-      { fieldName: '部署番号', csvColumn: '部署番号' },
+      // { fieldName: '部署番号', csvColumn: '部署番号' },
       { fieldName: '所属部署番号', csvColumn: '所属部署番号' },
     ],
 
@@ -1428,25 +1355,26 @@ const PRESETS = [
     ],
   },
 
-  // 预设38: 社員情報(従業員マスタ)数据同步
+  // 预设37: 社員情報(従業員マスタ)数据同步
   {
     id: 'employee-information',
     name: '社員情報',
     keyword: '社員情報',
-    mode: 'insert',
+    mode: 'upsert',
     tableName: '従業員マスタ',
 
     // Key 字段映射:空数组(insert 模式不需要 Key)
-    keyMappings: [],
+    keyMappings: [
+      { fieldName: '社員番号', csvColumn: '社員番号' },
+    ],
 
     // 更新字段映射:空数组(insert 模式不更新已有记录)
-    updateMappings: [],
-
-    // 新增字段映射:新增时写入社員基础信息
-    insertMappings: [
-      { fieldName: '社員番号', csvColumn: '社員番号' },
-      { fieldName: '社員氏名', csvColumn: '社員氏名' },
-      { fieldName: '社員氏名(かな)', csvColumn: '社員氏名(かな)' },
+    updateMappings: [
+      // { fieldName: '社員番号', csvColumn: '社員番号' },
+      // 社員氏名是成员字段,按文档要求通过 email 换取 user_id 后以 [{ id }] 数组写入
+      // { fieldName: '社員氏名', csvColumn: 'email', userLookupCsvColumn: 'email' },
+      // { fieldName: '社員氏名', csvColumn: '社員番号' },
+      { fieldName: '社員氏名(かな)', csvColumn: '社員氏名（かな）' },
       { fieldName: '役職名', csvColumn: '役職名' },
       { fieldName: '部署名', csvColumn: '部署名' },
       { fieldName: '郵便番号', csvColumn: '郵便番号' },
@@ -1457,6 +1385,121 @@ const PRESETS = [
       { fieldName: 'email', csvColumn: 'email' },
       { fieldName: '承認者1', csvColumn: '承認先①' },
       { fieldName: '承認者2', csvColumn: '承認先②' },
+    ],
+
+    // 新增字段映射:新增时写入社員基础信息
+    insertMappings: [
+      { fieldName: '社員番号', csvColumn: '社員番号' },
+      // 社員氏名是成员字段,按文档要求通过 email 换取 user_id 后以 [{ id }] 数组写入
+      // { fieldName: '社員氏名', csvColumn: 'email', userLookupCsvColumn: 'email' },
+      { fieldName: '社員氏名', csvColumn: '社員番号' },
+      { fieldName: '社員氏名(かな)', csvColumn: '社員氏名（かな）' },
+      { fieldName: '役職名', csvColumn: '役職名' },
+      { fieldName: '部署名', csvColumn: '部署名' },
+      { fieldName: '郵便番号', csvColumn: '郵便番号' },
+      { fieldName: '住所', csvColumn: '住所' },
+      { fieldName: '電話番号', csvColumn: '電話番号' },
+      { fieldName: '携帯番号', csvColumn: '携帯番号' },
+      { fieldName: '電話番号３', csvColumn: '電話番号3' },
+      { fieldName: 'email', csvColumn: 'email' },
+      { fieldName: '承認者1', csvColumn: '承認先①' },
+      { fieldName: '承認者2', csvColumn: '承認先②' },
+    ],
+  },
+
+  // 预设38: 予算数据同步
+  {
+    id: 'budget-data',
+    name: '予算',
+    keyword: '予算',
+    mode: 'upsert',
+    tableName: '月別予算',
+
+    // Key: ID(文本字段) <- CSV ID
+    keyMappings: [
+      { fieldName: 'ID', csvColumn: 'ID' },
+    ],
+
+    // 更新字段映射:更新时写入预算相关字段
+    updateMappings: [
+      { fieldName: '予算日付', csvColumn: '予算日付' },
+      { fieldName: '事業所', csvColumn: '事業所コード' },
+      // { fieldName: '担当部署', csvColumn: '担当部署' },
+      { fieldName: '従業員', csvColumn: '従業員コード' },
+      // { fieldName: '担当者名', csvColumn: '担当者名' },
+      { fieldName: '器具売上高_予算', csvColumn: '器具売上高' },
+      { fieldName: '器具利益_予算', csvColumn: '器具利益' },
+      { fieldName: '新設件数', csvColumn: '新設件数' },
+      { fieldName: '燃転_予算（台）', csvColumn: '燃転_予算' },
+      { fieldName: '買替_予算（台）', csvColumn: '買替_予算' },
+      { fieldName: '風呂切替_予算（台）', csvColumn: '風呂切替_予算' },
+      { fieldName: '新設_予算（台）', csvColumn: '新設_予算' },
+      { fieldName: 'その他_予算（台）', csvColumn: 'その他_予算' },
+      { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
+      { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
+      { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
+      { fieldName: 'エアバブル_予算（台）', csvColumn: '(内)エアバブル_予算' },
+      { fieldName: '浴暖_予算（台）', csvColumn: '浴室暖房_予算' },
+      { fieldName: 'レンジフード_予算（台）', csvColumn: 'レンジフード_予算' },
+      { fieldName: 'ビルトイン_予算（台）', csvColumn: 'GTビルトインコンロ_予算' },
+      { fieldName: '卓上_予算（台）', csvColumn: 'GT卓上_予算' },
+      { fieldName: '暖房機_予算（台）', csvColumn: '暖房機_予算' },
+      { fieldName: 'GHP_予算（台）', csvColumn: 'GHP_予算' },
+      { fieldName: '蓄電池_予算（台）', csvColumn: '蓄電池_予算' },
+      { fieldName: '衣類乾燥機_予算（台）', csvColumn: '衣類乾燥機_予算' },
+      { fieldName: '床暖_予算（台）', csvColumn: '床暖房_予算' },
+      { fieldName: '太陽光_予算（台）', csvColumn: '太陽光発電_予算' },
+      { fieldName: 'エネファーム_予算（台）', csvColumn: 'エネファーム_予算' },
+      { fieldName: 'リフォーム_予算（台）', csvColumn: 'リフォーム情報_予算' },
+      { fieldName: 'PPA_予算', csvColumn: 'PPA_予算' },
+      { fieldName: 'リターナブル_予算', csvColumn: 'リターナブル_予算' },
+      { fieldName: 'ワンウェイ_予算', csvColumn: 'ワンウェイ_予算' },
+      { fieldName: '電力_予算', csvColumn: '電力_予算' },
+      { fieldName: 'サポテン_予算', csvColumn: 'サポテン_予算' },
+      { fieldName: 'マイページ_予算', csvColumn: 'マイページ_予算' },
+      { fieldName: 'ハウスクリーニング_予算（台）', csvColumn: 'ハウスクリーニング_予算' },
+      { fieldName: '新都市ガス_予算（台）', csvColumn: '新都市ガス_予算' },
+    ],
+
+    // 新增字段映射:ID 会在 upsert 插入分支中由 keyMappings 自动补齐
+    insertMappings: [
+      { fieldName: '予算日付', csvColumn: '予算日付' },
+      { fieldName: '事業所', csvColumn: '事業所コード' },
+      // { fieldName: '担当部署', csvColumn: '担当部署' },
+      { fieldName: '従業員', csvColumn: '従業員コード' },
+      // { fieldName: '担当者名', csvColumn: '担当者名' },
+      { fieldName: '器具売上高_予算', csvColumn: '器具売上高' },
+      { fieldName: '器具利益_予算', csvColumn: '器具利益' },
+      { fieldName: '新設件数', csvColumn: '新設件数' },
+      { fieldName: '燃転_予算（台）', csvColumn: '燃転_予算' },
+      { fieldName: '買替_予算（台）', csvColumn: '買替_予算' },
+      { fieldName: '風呂切替_予算（台）', csvColumn: '風呂切替_予算' },
+      { fieldName: '新設_予算（台）', csvColumn: '新設_予算' },
+      { fieldName: 'その他_予算（台）', csvColumn: 'その他_予算' },
+      { fieldName: 'ハイブリッド_予算（台）', csvColumn: 'ハイブリッド_予算' },
+      { fieldName: '高・2缶3水_予算（台）', csvColumn: '高効率2缶3水_予算' },
+      { fieldName: '高効率_予算（台）', csvColumn: '高効率_予算' },
+      { fieldName: 'エアバブル_予算（台）', csvColumn: '(内)エアバブル_予算' },
+      { fieldName: '浴暖_予算（台）', csvColumn: '浴室暖房_予算' },
+      { fieldName: 'レンジフード_予算（台）', csvColumn: 'レンジフード_予算' },
+      { fieldName: 'ビルトイン_予算（台）', csvColumn: 'GTビルトインコンロ_予算' },
+      { fieldName: '卓上_予算（台）', csvColumn: 'GT卓上_予算' },
+      { fieldName: '暖房機_予算（台）', csvColumn: '暖房機_予算' },
+      { fieldName: 'GHP_予算（台）', csvColumn: 'GHP_予算' },
+      { fieldName: '蓄電池_予算（台）', csvColumn: '蓄電池_予算' },
+      { fieldName: '衣類乾燥機_予算（台）', csvColumn: '衣類乾燥機_予算' },
+      { fieldName: '床暖_予算（台）', csvColumn: '床暖房_予算' },
+      { fieldName: '太陽光_予算（台）', csvColumn: '太陽光発電_予算' },
+      { fieldName: 'エネファーム_予算（台）', csvColumn: 'エネファーム_予算' },
+      { fieldName: 'リフォーム_予算（台）', csvColumn: 'リフォーム情報_予算' },
+      { fieldName: 'PPA_予算', csvColumn: 'PPA_予算' },
+      { fieldName: 'リターナブル_予算', csvColumn: 'リターナブル_予算' },
+      { fieldName: 'ワンウェイ_予算', csvColumn: 'ワンウェイ_予算' },
+      { fieldName: '電力_予算', csvColumn: '電力_予算' },
+      { fieldName: 'サポテン_予算', csvColumn: 'サポテン_予算' },
+      { fieldName: 'マイページ_予算', csvColumn: 'マイページ_予算' },
+      { fieldName: 'ハウスクリーニング_予算（台）', csvColumn: 'ハウスクリーニング_予算' },
+      { fieldName: '新都市ガス_予算（台）', csvColumn: '新都市ガス_予算' },
     ],
   },
 ];

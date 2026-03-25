@@ -94,41 +94,31 @@ function parseDateTimeValue(raw, fieldName) {
     throw new Error(`フィールド "${fieldName}" は日時を求めていますが、空の値が入力されました。`);
   }
 
-  // 尝试匹配紧凑日期格式:YYYYMMDD
-  const compactDateMatch = source.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (compactDateMatch) {
-    const year = Number(compactDateMatch[1]); // 年份
-    const month = Number(compactDateMatch[2]); // 月份
-    const day = Number(compactDateMatch[3]); // 日期
-    const date = new Date(year, month - 1, day); // 构造日期对象(月份从 0 开始)
-    // 验证日期有效性(防止 2 月 30 日等无效日期)
-    if (
-      date.getFullYear() !== year ||
-      date.getMonth() !== month - 1 ||
-      date.getDate() !== day
-    ) {
-      throw new Error(`フィールド "${fieldName}" は日時を求めていますが、"${raw}" が入力されました。`);
-    }
-    return date.getTime(); // 返回毫秒时间戳
+  // 仅允许日期格式,并且要求分隔符前后一致
+  const dateMatch = source.match(/^(\d{4})([/-])(\d{1,2})\2(\d{1,2})$/);
+  if (!dateMatch) {
+    throw new Error(
+      `フィールド "${fieldName}" は YYYY/MM/DD または YYYY-MM-DD 形式のみ対応していますが、"${raw}" が入力されました。`
+    );
   }
 
-  // 尝试解析为纯数字(Unix 时间戳)
-  if (/^-?\d+(\.\d+)?$/.test(source)) {
-    const numeric = Number(source);
-    if (!Number.isFinite(numeric)) {
-      throw new Error(`フィールド "${fieldName}" は日時を求めていますが、"${raw}" が入力されました。`);
-    }
-    if (source.includes('.')) return numeric; // 包含小数点,直接返回(毫秒)
-    // 根据位数判断:10 位以下为秒,需乘 1000 转毫秒;否则为毫秒
-    return source.length <= 10 ? numeric * 1000 : numeric;
+  const year = Number(dateMatch[1]);
+  const month = Number(dateMatch[3]);
+  const day = Number(dateMatch[4]);
+  const date = new Date(year, month - 1, day);
+
+  // 验证日期有效性,避免 2026/02/30 这类值被 Date 自动进位
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    throw new Error(
+      `フィールド "${fieldName}" は有効な YYYY/MM/DD または YYYY-MM-DD 日付のみ対応していますが、"${raw}" が入力されました。`
+    );
   }
 
-  // 尝试使用 Date.parse 解析 ISO 格式等标准日期字符串
-  const ms = Date.parse(source);
-  if (!Number.isFinite(ms)) {
-    throw new Error(`フィールド "${fieldName}" は日時を求めていますが、"${raw}" が入力されました。`);
-  }
-  return ms; // 返回毫秒时间戳
+  return date.getTime();
 }
 
 // 解析布尔值:支持多种真假值表示
@@ -164,10 +154,76 @@ function getLinkTableId(meta) {
   return meta.property.table_id || meta.property.tableId || ''; // 返回表 ID
 }
 
+// 获取单选/多选字段的可用选项列表
+// @param {Object} meta - 字段元数据对象
+// @returns {Array<Object>} - 选项数组
+function getSelectOptions(meta) {
+  if (!meta || !meta.property || typeof meta.property !== 'object') return [];
+  return Array.isArray(meta.property.options) ? meta.property.options : [];
+}
+
+// 构建选项字段的标准化映射
+// 兼容 name / text / value 等多种字段结构，统一映射到 Base 中的实际选项值。
+// @param {Object} meta - 字段元数据对象
+// @returns {Map<string, string>} - 标准化候选值 -> Base 中实际选项值
+function buildSelectOptionMap(meta) {
+  const optionMap = new Map();
+
+  getSelectOptions(meta).forEach((option) => {
+    if (!option || typeof option !== 'object') return;
+
+    const actualValue = option.name || option.text || option.value || option.id || '';
+    if (!actualValue) return;
+
+    [option.name, option.text, option.value, option.id]
+      .map((item) => normalizeText(item))
+      .filter(Boolean)
+      .forEach((candidate) => {
+        if (!optionMap.has(candidate)) {
+          optionMap.set(candidate, String(actualValue).trim());
+        }
+      });
+  });
+
+  return optionMap;
+}
+
+// 校验并归一化单选/多选字段值
+// @param {string[]} tokens - CSV 拆分后的值数组
+// @param {Object} fieldMeta - 字段元数据对象
+// @param {string} fieldName - 字段名(用于错误提示)
+// @param {boolean} multiple - 是否为多选字段
+// @returns {string|string[]} - 可写入 Base 的合法值
+function normalizeSelectValue(tokens, fieldMeta, fieldName, multiple) {
+  if (!multiple && tokens.length > 1) {
+    throw new Error(
+      `フィールド "${fieldName}" は単一選択ですが、複数の値が入力されました: ${tokens.join(', ')}`
+    );
+  }
+
+  const optionMap = buildSelectOptionMap(fieldMeta);
+  if (optionMap.size === 0) {
+    // 没有可用选项元数据时保持现有行为，不额外阻断。
+    return multiple ? tokens : (tokens[0] || '');
+  }
+
+  const resolved = tokens.map((token) => {
+    const matched = optionMap.get(normalizeText(token));
+    if (!matched) {
+      throw new Error(
+        `フィールド "${fieldName}" の選択値 "${token}" は Lark Base の選択肢に存在しません`
+      );
+    }
+    return matched;
+  });
+
+  return multiple ? resolved : (resolved[0] || '');
+}
+
 /**
  * 处理分页 token 重复问题
  * 当 Lark API 返回重复的 page_token 时,进行重试或抛出错误
- * 
+ *
  * @param {Object} params - 参数对象
  * @param {string} params.stageLabel - 阶段标签(用于日志)
  * @param {string} params.currentToken - 当前 page_token
@@ -177,7 +233,7 @@ function getLinkTableId(meta) {
  * @param {number} params.repeatRetryCount - 当前重试次数
  * @returns {Object} - 决策结果 { retry, nextPageToken, repeatRetryCount, waitMs }
  * @throws {Error} - 如果超过最大重试次数
- * 
+ *
  * 重试策略:
  * - 指数退避:500ms * 2^(attempt-1)
  * - 最大等待时间:5000ms
@@ -252,28 +308,28 @@ function resolveNextPageToken({
 /**
  * 构建关联字段解析器
  * 扫描关联表,建立"文本值 -> 记录ID"的映射,用于自动解析关联字段
- * 
+ *
  * @param {LarkApiClient} client - Lark API 客户端
  * @param {string} appToken - Base 应用 token
  * @param {Map} fieldMetaByName - 字段元数据映射表
  * @param {Array} allMappings - 所有字段映射(key + update + insert)
  * @param {Function} onProgress - 进度回调函数
  * @returns {Promise<Map>} - 解析器映射表(字段名 -> resolver)
- * 
+ *
  * Resolver 结构:
  * {
  *   linkedTableId: 'tbl...',      // 关联表 ID
  *   searchableFields: ['Name'],   // 可搜索字段列表
  *   valueToIds: Map<string, string> // 值 -> 记录ID 映射
  * }
- * 
+ *
  * 工作流程:
  * 1. 遍历所有映射,找出关联字段
  * 2. 获取关联表的字段列表
  * 3. 筛选可搜索字段(文本、数字、电话、URL、场所)
  * 4. 全量扫描关联表,建立值到记录ID的映射
  * 5. 处理分页和去重
- * 
+ *
  * 性能优化:
  * - 每个关联表只扫描一次
  * - 使用 Set 去重记录ID
@@ -289,7 +345,7 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
   // 目标系统配置: 特定表名及对应的必须要获取的项目字段
   const TARGET_FIELDS_MAP = {
     '顧客管理': ['需要家コード', '顧客名', '顧客名（カナ）'],
-    '事業所マスタ': ['事務所名'],
+    '事業所マスタ': ['事務所名','部署番号'],
     '従業員マスタ': ['社員番号', '社員氏名', '社員氏名(かな)'],
     '案件管理': ['案件コード', '案件名'],
   };
@@ -314,7 +370,7 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
 
     // 标准化表名用于匹配 (移除空格)
     const normalizedLinkedTableName = String(linkedTable.name).replace(/\s+/g, '');
-    
+
     // 查找对应的配置项 (也忽略配置字典 key 的空格)
     let requiredFields = null;
     let matchedTableName = '';
@@ -480,22 +536,24 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
 /**
  * 转换原始值为 Lark 字段值
  * 根据字段类型进行智能转换
- * 
+ *
  * @param {any} raw - 原始值(来自 CSV)
  * @param {Object} fieldMeta - 字段元数据
  * @param {string} fieldName - 字段名(用于错误提示)
  * @param {Map} linkResolvers - 关联字段解析器映射表
  * @returns {any} - 转换后的值
  * @throws {Error} - 如果转换失败
- * 
+ *
  * 支持的字段类型:
  * - 关联字段(Link): 解析为记录ID数组
+ * - 成员/人员(type=11): 解析为 [{ id: user_id }]
  * - 数字(type=2): 解析为数字
  * - 日期时间(type=5): 解析为 Unix 时间戳(毫秒)
  * - 布尔(type=7): 解析为 true/false
- * - 多选(type=4): 分割为字符串数组
+ * - 单选(type=3): 校验值必须存在于 Base 选项中
+ * - 多选(type=4): 校验每个值必须存在于 Base 选项中
  * - 其他: 保持原始文本
- * 
+ *
  * 关联字段解析策略:
  * 1. 优先尝试提取 rec 开头的记录ID
  * 2. 如果没有记录ID,使用解析器查找文本值对应的记录ID
@@ -549,6 +607,13 @@ function convertRawValue(raw, fieldMeta, fieldName, linkResolvers) {
   // 根据字段类型转换
   const type = Number(fieldMeta.type);
 
+  if (type === 11) {
+    // 人员字段要求传入 [{ id }] 数组，具体 ID 类型由请求上的 user_id_type 决定。
+    // 当前 lark-api.js 在 batch_create / batch_update 上统一指定为 user_id，
+    // 因此这里把 CSV 中的 user_id 文本转成成员对象数组。
+    return splitCellValues(text).map((userId) => ({ id: userId }));
+  }
+
   if (type === 2) {
     // 数字类型
     return parseNumberValue(text, fieldName);
@@ -564,9 +629,14 @@ function convertRawValue(raw, fieldMeta, fieldName, linkResolvers) {
     return parseBooleanValue(text, fieldName);
   }
 
+  if (type === 3) {
+    // 单选类型
+    return normalizeSelectValue(splitCellValues(text), fieldMeta, fieldName, false);
+  }
+
   if (type === 4) {
     // 多选类型
-    return splitCellValues(text);
+    return normalizeSelectValue(splitCellValues(text), fieldMeta, fieldName, true);
   }
 
   // 其他类型,返回原始文本
@@ -576,15 +646,15 @@ function convertRawValue(raw, fieldMeta, fieldName, linkResolvers) {
 /**
  * 构建字段元数据映射表
  * 将字段元数据数组转换为 Map,以字段名(小写)为 key
- * 
+ *
  * @param {Array<Object>} fieldMetas - 字段元数据数组
  * @returns {Map<string, Object>} - 字段名 -> 元数据的映射表
- * 
+ *
  * 处理逻辑:
  * - 规范化字段名(转小写)作为 key
  * - 如果字段名重复,保留第一个
  * - 忽略无效的元数据对象
- * 
+ *
  * @example
  * const metas = [
  *   { field_name: 'Name', type: 1 },
@@ -606,17 +676,17 @@ function buildFieldMetaByName(fieldMetas) {
 /**
  * 将值转换为可比较的字符串
  * 用于构建主键和比较字段值
- * 
+ *
  * @param {any} value - 要转换的值
  * @returns {string} - 可比较的字符串表示
- * 
+ *
  * 转换规则:
  * - null/undefined: 返回空字符串
  * - 字符串: 去除首尾空格
  * - 数字/布尔: 转换为字符串
  * - 数组: 递归转换每项,用 | 连接
  * - 对象: 优先提取 text/name/id 属性,否则 JSON 序列化
- * 
+ *
  * @example
  * toComparable('  hello  ') // 返回 'hello'
  * toComparable([1, 2, 3]) // 返回 '1|2|3'
@@ -633,9 +703,16 @@ function toComparable(value) {
       .join('|');
   }
   if (typeof value === 'object') {
+    // Bitable 的数式/富文本字段有时返回 { type, value: [...] } 包装对象
+    // 这里优先递归展开 value，确保 key 比较使用真实文本，而不是整个对象的 JSON。
+    if ('value' in value) {
+      return toComparable(value.value);
+    }
     if (value.text) return String(value.text).trim();
     if (value.name) return String(value.name).trim();
     if (value.id) return String(value.id).trim();
+    if (value.display_name) return String(value.display_name).trim();
+    if (value.email) return String(value.email).trim();
     return JSON.stringify(value);
   }
   return String(value).trim();
@@ -644,14 +721,14 @@ function toComparable(value) {
 /**
  * 连接主键部分为复合键
  * 使用特殊分隔符连接多个主键部分
- * 
+ *
  * @param {Array<string>} parts - 主键部分数组
  * @returns {string} - 连接后的复合键
- * 
+ *
  * 分隔符: ||#||
  * - 使用不常见的分隔符,避免与实际数据冲突
  * - 每个部分都会规范化(转小写)
- * 
+ *
  * @example
  * joinKey(['ABC', '123']) // 返回 'abc||#||123'
  */
@@ -662,20 +739,20 @@ function joinKey(parts) {
 /**
  * 从 API 响应中提取创建的记录 ID
  * 支持多种响应格式
- * 
+ *
  * @param {Object} payload - API 响应对象
  * @returns {Array<string>} - 记录 ID 数组
- * 
+ *
  * 支持的响应格式:
  * - { records: [{ record_id: '...' }] }
  * - { items: [{ record_id: '...' }] }
  * - { record: { record_id: '...' } }
- * 
+ *
  * 字段名兼容:
  * - record_id (标准)
  * - recordId (驼峰)
  * - id (简写)
- * 
+ *
  * @example
  * extractCreatedRecordIds({ records: [{ record_id: 'rec123' }] })
  * // 返回 ['rec123']
@@ -702,10 +779,10 @@ function extractCreatedRecordIds(payload) {
 
 /**
  * 将错误对象转换为错误消息字符串
- * 
+ *
  * @param {Error|any} error - 错误对象
  * @returns {string} - 错误消息
- * 
+ *
  * @example
  * toErrorMessage(new Error('test')) // 返回 'test'
  * toErrorMessage('error string') // 返回 'error string'
@@ -718,15 +795,15 @@ function toErrorMessage(error) {
 /**
  * 触发进度回调
  * 安全地调用进度回调函数,忽略回调中的错误
- * 
+ *
  * @param {Function} onProgress - 进度回调函数
  * @param {Object} payload - 进度数据
- * 
+ *
  * 安全处理:
  * - 检查回调是否为函数
  * - 捕获并忽略回调中的所有错误
  * - 确保回调错误不会中断同步流程
- * 
+ *
  * @example
  * emitProgress(onProgress, {
  *   phase: 'running',
@@ -745,14 +822,14 @@ function emitProgress(onProgress, payload) {
 
 /**
  * 检查主键部分是否包含空值
- * 
+ *
  * @param {Array<string>} parts - 主键部分数组
  * @returns {boolean} - 是否包含空值
- * 
+ *
  * 空值定义:
  * - 空字符串
  * - 仅包含空格的字符串
- * 
+ *
  * @example
  * hasEmptyKeyPart(['abc', '']) // 返回 true
  * hasEmptyKeyPart(['abc', '123']) // 返回 false
@@ -764,15 +841,15 @@ function hasEmptyKeyPart(parts) {
 /**
  * 从记录对象中提取记录 ID
  * 支持多种字段名格式
- * 
+ *
  * @param {Object} item - 记录对象
  * @returns {string} - 记录 ID,未找到返回空字符串
- * 
+ *
  * 支持的字段名:
  * - record_id (标准)
  * - recordId (驼峰)
  * - id (简写)
- * 
+ *
  * @example
  * getRecordIdFromItem({ record_id: 'rec123' }) // 返回 'rec123'
  * getRecordIdFromItem({ id: 'rec456' }) // 返回 'rec456'
@@ -784,14 +861,14 @@ function getRecordIdFromItem(item) {
 
 /**
  * 判断错误是否为重复分页 token 错误
- * 
+ *
  * @param {Error|any} error - 错误对象
  * @returns {boolean} - 是否为重复 token 错误
- * 
+ *
  * 检查逻辑:
  * - 提取错误消息
  * - 检查是否包含 "repeated next page token" 或 "repeated page token"
- * 
+ *
  * @example
  * isRepeatedPageTokenError(new Error('repeated next page token'))
  * // 返回 true
@@ -804,10 +881,10 @@ function isRepeatedPageTokenError(error) {
 /**
  * 构建统计对象
  * 初始化同步统计信息
- * 
+ *
  * @param {Object} params - 同步参数
  * @returns {Object} - 统计对象
- * 
+ *
  * 统计字段:
  * - csvPath: CSV 文件绝对路径
  * - tableId: 目标表格 ID
@@ -823,7 +900,7 @@ function isRepeatedPageTokenError(error) {
  * - startedAt: 开始时间(ISO 格式)
  * - endedAt: 结束时间(ISO 格式)
  * - failures: 失败记录数组
- * 
+ *
  * @example
  * const stats = buildStats({ csvPath: 'data.csv', tableId: 'tbl123', mode: 'upsert' });
  */
@@ -849,16 +926,16 @@ function buildStats(params) {
 /**
  * 添加失败记录
  * 将失败的行记录到统计对象中
- * 
+ *
  * @param {Object} stats - 统计对象
  * @param {number} rowNumber - 行号
  * @param {string} reason - 失败原因
  * @param {Object} rowData - 行数据(可选)
- * 
+ *
  * 副作用:
  * - stats.failedRows 递增
  * - 失败记录添加到 stats.failures 数组
- * 
+ *
  * @example
  * pushFailure(stats, 10, 'キー値が空です', { name: 'test' });
  */
@@ -867,19 +944,75 @@ function pushFailure(stats, rowNumber, reason, rowData) {
   stats.failures.push({ rowNumber, reason, rowData: rowData || null });
 }
 
+// 从映射数组中查找指定 Base 字段对应的 CSV 列名
+// @param {Array<Object>} mappings - 映射数组
+// @param {string} fieldName - Base 字段名
+// @returns {string} - 对应的 CSV 列名,未找到返回空字符串
+function findCsvColumnByFieldName(mappings, fieldName) {
+  const target = normalizeText(fieldName);
+  const match = (Array.isArray(mappings) ? mappings : []).find(
+    (mapping) => normalizeText(mapping.fieldName) === target && mapping.csvColumn
+  );
+  return match ? String(match.csvColumn).trim() : '';
+}
+
+// 校验従業員マスタ中承認先不能指向当前行本人
+// 规则:
+// - 承認先① / 承認先② 的值不能等于当前行的 社員番号
+// - 命中时返回错误,由 runSync 统一写入 failures / error log
+// @param {Object} row - CSV 行对象
+// @param {Array<Object>} keyMappings - 主键映射
+// @param {Array<Object>} updateMappings - 更新映射
+// @param {Array<Object>} insertMappings - 插入映射
+// @returns {Array<Object>} - 错误数组 [{ message }]
+function validateEmployeeApproverSelfReference(row, keyMappings, updateMappings, insertMappings) {
+  const allMappings = [
+    ...(Array.isArray(keyMappings) ? keyMappings : []),
+    ...(Array.isArray(updateMappings) ? updateMappings : []),
+    ...(Array.isArray(insertMappings) ? insertMappings : []),
+  ];
+
+  const employeeNoColumn = findCsvColumnByFieldName(allMappings, '社員番号');
+  const approverColumns = Array.from(
+    new Set(
+      ['承認者1', '承認者2']
+        .map((fieldName) => findCsvColumnByFieldName(allMappings, fieldName))
+        .filter(Boolean)
+    )
+  );
+
+  if (!employeeNoColumn || approverColumns.length === 0) return [];
+
+  const employeeNo = normalizeText(row[employeeNoColumn]);
+  if (!employeeNo) return [];
+
+  const errors = [];
+  approverColumns.forEach((column) => {
+    const approverValues = splitCellValues(row[column]);
+    const selfAssigned = approverValues.some((item) => normalizeText(item) === employeeNo);
+    if (!selfAssigned) return;
+
+    errors.push({
+      message: `${column} の値に社員番号 ${String(row[employeeNoColumn] || '').trim()} は指定できません`,
+    });
+  });
+
+  return errors;
+}
+
 /**
  * 从更新映射中过滤掉主键字段
  * 防止更新操作修改主键字段
- * 
+ *
  * @param {Array<Object>} updateMappings - 更新字段映射
  * @param {Array<Object>} keyMappings - 主键字段映射
  * @returns {Object} - { filtered: 过滤后的映射, blocked: 被阻止的字段名 }
- * 
+ *
  * 过滤逻辑:
  * - 提取所有主键字段名
  * - 从更新映射中移除主键字段
  * - 返回过滤后的映射和被阻止的字段名列表
- * 
+ *
  * @example
  * const result = filterKeyFieldsFromUpdateMappings(
  *   [{ fieldName: 'Name' }, { fieldName: 'Code' }],
@@ -911,20 +1044,20 @@ function filterKeyFieldsFromUpdateMappings(updateMappings, keyMappings) {
 /**
  * 验证字段映射
  * 检查映射中的字段是否都存在于表格中
- * 
+ *
  * @param {Array<string>} fieldNames - 表格中的字段名列表
  * @param {Array<Object>} keyMappings - 主键映射
  * @param {Array<Object>} updateMappings - 更新映射
  * @param {Array<Object>} insertMappings - 插入映射
  * @throws {Error} - 如果发现不存在的字段
- * 
+ *
  * 验证逻辑:
  * - 构建字段名映射表(不区分大小写)
  * - 检查主键映射中的字段
  * - 检查更新映射中的字段
  * - 检查插入映射中的字段
  * - 如果发现不存在的字段,抛出错误
- * 
+ *
  * @example
  * validateMappings(
  *   ['Name', 'Age'],
@@ -963,14 +1096,14 @@ function validateMappings(fieldNames, keyMappings, updateMappings, insertMapping
 /**
  * 从 CSV 行构建字段值对象
  * 根据映射关系提取并转换 CSV 行数据
- * 
+ *
  * @param {Object} row - CSV 行对象(列名 -> 值)
  * @param {Array<Object>} valueMappings - 字段映射数组
  * @param {boolean} clearEmpty - 是否清空空值字段(设为 null)
  * @param {Map} fieldMetaByName - 字段元数据映射表
  * @param {Map} linkResolvers - 关联字段解析器
  * @returns {Object} - 字段名 -> 转换后的值
- * 
+ *
  * 处理逻辑:
  * 1. 遍历所有映射
  * 2. 从 CSV 行中提取对应列的值
@@ -981,7 +1114,7 @@ function validateMappings(fieldNames, keyMappings, updateMappings, insertMapping
  *    - 查找字段元数据
  *    - 调用 convertRawValue 进行类型转换
  * 5. 返回字段值对象
- * 
+ *
  * @example
  * const fields = buildFieldsFromRow(
  *   { Name: 'John', Age: '30' },
@@ -1014,16 +1147,16 @@ function buildFieldsFromRow(row, valueMappings, clearEmpty, fieldMetaByName, lin
 /**
  * 为 empty 模式构建字段值对象
  * 将所有映射字段设为 null,并记录非空字段
- * 
+ *
  * @param {Object} row - CSV 行对象
  * @param {Array<Object>} valueMappings - 字段映射数组
  * @returns {Object} - { fields: 字段值对象, nonEmptyFields: 非空字段名数组 }
- * 
+ *
  * empty 模式说明:
  * - 用于清空字段值
  * - 要求 CSV 中对应列必须为空
  * - 如果列非空,记录为错误
- * 
+ *
  * @example
  * const result = buildFieldsForEmptyMode(
  *   { Name: '', Age: '30' },
@@ -1055,13 +1188,13 @@ function buildFieldsForEmptyMode(row, valueMappings) {
 /**
  * 从 CSV 行构建主键部分数组
  * 提取并转换主键字段的值
- * 
+ *
  * @param {Object} row - CSV 行对象
  * @param {Array<Object>} keyMappings - 主键映射数组
  * @param {Map} fieldMetaByName - 字段元数据映射表
  * @param {Map} linkResolvers - 关联字段解析器
  * @returns {Array<string>} - 主键部分数组(可比较的字符串)
- * 
+ *
  * 处理逻辑:
  * 1. 遍历主键映射
  * 2. 提取 CSV 列值
@@ -1071,7 +1204,7 @@ function buildFieldsForEmptyMode(row, valueMappings) {
  *    - 转换为 Lark 字段值
  *    - 转换为可比较的字符串
  * 5. 返回主键部分数组
- * 
+ *
  * @example
  * const keyParts = buildKeyPartsFromRow(
  *   { Code: 'A001', Name: 'John' },
@@ -1096,14 +1229,14 @@ function buildKeyPartsFromRow(row, keyMappings, fieldMetaByName, linkResolvers) 
 /**
  * 构建包含主键的插入字段对象
  * 合并当前字段和主键字段
- * 
+ *
  * @param {Object} row - CSV 行对象
  * @param {Array<Object>} keyMappings - 主键映射数组
  * @param {Object} currentFields - 当前字段值对象
  * @param {Map} fieldMetaByName - 字段元数据映射表
  * @param {Map} linkResolvers - 关联字段解析器
  * @returns {Object} - 合并后的字段值对象
- * 
+ *
  * 处理逻辑:
  * 1. 复制当前字段对象
  * 2. 遍历主键映射
@@ -1113,11 +1246,11 @@ function buildKeyPartsFromRow(row, keyMappings, fieldMetaByName, linkResolvers) 
  *    - 转换为 Lark 字段值
  *    - 添加到字段对象
  * 5. 返回合并后的字段对象
- * 
+ *
  * 使用场景:
  * - upsert 模式下插入新记录
  * - 确保主键字段包含在插入数据中
- * 
+ *
  * @example
  * const fields = buildInsertFieldsWithKey(
  *   { Code: 'A001', Name: 'John' },
@@ -1147,19 +1280,19 @@ function buildInsertFieldsWithKey(row, keyMappings, currentFields, fieldMetaByNa
 
 /**
  * 判断是否因为没有可写字段而跳过
- * 
+ *
  * @param {Object} fields - 字段值对象
  * @param {boolean} clearEmpty - 是否清空模式
  * @returns {boolean} - 是否应该跳过
- * 
+ *
  * 跳过条件:
  * - clearEmpty=false 且 fields 为空对象
  * - 表示没有任何字段需要更新
- * 
+ *
  * 不跳过条件:
  * - clearEmpty=true: 即使 fields 为空,也要执行(清空操作)
  * - fields 非空: 有字段需要更新
- * 
+ *
  * @example
  * shouldSkipBecauseNoWritableField({}, false) // 返回 true
  * shouldSkipBecauseNoWritableField({}, true) // 返回 false
@@ -1173,7 +1306,7 @@ function shouldSkipBecauseNoWritableField(fields, clearEmpty) {
 /**
  * 构建记录索引(使用 search API)
  * 扫描表格中的所有记录,建立主键到记录ID的映射
- * 
+ *
  * @param {LarkApiClient} client - Lark API 客户端
  * @param {string} appToken - Base 应用 token
  * @param {string} tableId - 表格 ID
@@ -1181,26 +1314,26 @@ function shouldSkipBecauseNoWritableField(fields, clearEmpty) {
  * @param {Object} stats - 统计对象
  * @param {Function} onProgress - 进度回调函数
  * @returns {Promise<Object>} - { recordIndex, indexedCount, scannedCount, duplicateCount }
- * 
+ *
  * 工作流程:
  * 1. 使用 search API 分页获取记录
  * 2. 提取主键字段值
  * 3. 构建复合主键
  * 4. 建立主键 -> 记录ID 的映射
  * 5. 处理重复记录和分页 token
- * 
+ *
  * 返回对象:
  * - recordIndex: Map<主键, 记录ID数组>
  * - indexedCount: 索引的记录数(有效主键)
  * - scannedCount: 扫描的唯一记录数
  * - duplicateCount: 去重的记录数
- * 
+ *
  * 性能优化:
  * - 每页 500 条记录
  * - 去重处理(避免重复扫描)
  * - 每 5000 条输出进度
  * - 处理分页 token 重复问题
- * 
+ *
  * @example
  * const result = await buildRecordIndex(
  *   client, appToken, tableId, keyMappings, stats, onProgress
@@ -1313,7 +1446,7 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
 /**
  * 构建记录索引(使用 list API,备用方案)
  * 当 search API 出现分页 token 重复问题时使用
- * 
+ *
  * @param {LarkApiClient} client - Lark API 客户端
  * @param {string} appToken - Base 应用 token
  * @param {string} tableId - 表格 ID
@@ -1321,14 +1454,14 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
  * @param {Object} stats - 统计对象
  * @param {Function} onProgress - 进度回调函数
  * @returns {Promise<Object>} - { recordIndex, indexedCount, scannedCount, duplicateCount }
- * 
+ *
  * 与 buildRecordIndex 的区别:
  * - 使用 listRecords API 而非 searchRecords
  * - listRecords 返回所有字段,不能指定字段列表
  * - 作为 search API 失败时的备用方案
- * 
+ *
  * 工作流程与 buildRecordIndex 相同
- * 
+ *
  * @example
  * const result = await buildRecordIndexViaListRecords(
  *   client, appToken, tableId, keyMappings, stats, onProgress
@@ -1435,11 +1568,11 @@ async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMapp
 /**
  * 刷新更新批次
  * 将累积的更新操作批量提交到 Lark API
- * 
+ *
  * @param {Object} ctx - 客户端上下文对象
  * @param {boolean} forceSingle - 是否强制单条提交(默认 false)
  * @returns {Promise<void>}
- * 
+ *
  * 上下文对象包含:
  * - client: Lark API 客户端
  * - appToken: Base 应用 token
@@ -1448,7 +1581,7 @@ async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMapp
  * - stats: 统计对象
  * - saveProgress: 保存进度函数
  * - batchSize: 批次大小
- * 
+ *
  * 工作流程:
  * 1. 取出所有待更新的记录
  * 2. 如果 forceSingle=true,逐条提交
@@ -1456,12 +1589,12 @@ async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMapp
  * 4. 并发提交所有分块(最多 25 个并发)
  * 5. 如果批量提交失败,回退到单条提交
  * 6. 更新统计并保存进度
- * 
+ *
  * 错误处理:
  * - 批量失败时自动回退到单条提交
  * - 单条失败时记录到 failures
  * - 确保部分失败不影响其他记录
- * 
+ *
  * @example
  * await flushUpdateBatch(ctx, false);
  */
@@ -1543,11 +1676,11 @@ async function flushUpdateBatch(ctx, forceSingle = false) {
 /**
  * 刷新插入批次
  * 将累积的插入操作批量提交到 Lark API
- * 
+ *
  * @param {Object} ctx - 客户端上下文对象
  * @param {boolean} forceSingle - 是否强制单条提交(默认 false)
  * @returns {Promise<void>}
- * 
+ *
  * 上下文对象包含:
  * - client: Lark API 客户端
  * - appToken: Base 应用 token
@@ -1559,7 +1692,7 @@ async function flushUpdateBatch(ctx, forceSingle = false) {
  * - mode: 同步模式
  * - recordIndex: 记录索引(upsert 模式需要)
  * - pendingInsertByKey: 待插入记录映射(upsert 模式需要)
- * 
+ *
  * 工作流程:
  * 1. 取出所有待插入的记录
  * 2. 清理 pendingInsertByKey 映射
@@ -1569,16 +1702,16 @@ async function flushUpdateBatch(ctx, forceSingle = false) {
  * 6. 如果批量提交失败,回退到单条提交
  * 7. upsert 模式下,更新 recordIndex(记录新创建的记录ID)
  * 8. 更新统计并保存进度
- * 
+ *
  * upsert 模式特殊处理:
  * - 提取创建的记录ID
  * - 更新 recordIndex,避免后续重复插入
- * 
+ *
  * 错误处理:
  * - 批量失败时自动回退到单条提交
  * - 单条失败时记录到 failures
  * - 确保部分失败不影响其他记录
- * 
+ *
  * @example
  * await flushInsertBatch(ctx, false);
  */
@@ -1700,7 +1833,7 @@ async function flushInsertBatch(ctx, forceSingle = false) {
 /**
  * 创建客户端上下文对象
  * 封装同步操作所需的所有上下文信息
- * 
+ *
  * @param {Object} params - 同步参数
  * @param {Object} stats - 统计对象
  * @param {Map} recordIndex - 记录索引
@@ -1708,7 +1841,7 @@ async function flushInsertBatch(ctx, forceSingle = false) {
  * @param {Array} updateBatch - 更新批次数组
  * @param {Object} rowCounterRef - 行计数器引用对象
  * @returns {Object} - 客户端上下文对象
- * 
+ *
  * 上下文对象包含:
  * - client: Lark API 客户端
  * - appToken: Base 应用 token
@@ -1721,12 +1854,12 @@ async function flushInsertBatch(ctx, forceSingle = false) {
  * - insertBatch: 插入批次数组
  * - updateBatch: 更新批次数组
  * - saveProgress: 保存进度函数
- * 
+ *
  * saveProgress 函数:
  * - 保存检查点到文件
  * - 包含当前进度和统计信息
  * - 用于断点续传
- * 
+ *
  * @example
  * const ctx = createClientContext(
  *   params, stats, recordIndex, insertBatch, updateBatch, rowCounterRef
@@ -1767,7 +1900,7 @@ function createClientContext(params, stats, recordIndex, insertBatch, updateBatc
 /**
  * 运行同步任务(主函数)
  * 将 CSV 文件数据同步到 Lark 多维表格
- * 
+ *
  * @param {Object} params - 同步参数对象
  * @param {LarkApiClient} params.client - Lark API 客户端
  * @param {string} params.appToken - Base 应用 token
@@ -1784,13 +1917,13 @@ function createClientContext(params, stats, recordIndex, insertBatch, updateBatc
  * @param {number} params.resumeRow - 恢复行号(从检查点恢复)
  * @param {Function} params.onProgress - 进度回调函数
  * @returns {Promise<Object>} - 同步统计对象
- * 
+ *
  * 同步模式说明:
  * - insert: 仅插入新记录,不更新现有记录
  * - update: 仅更新现有记录,不插入新记录
  * - upsert: 更新现有记录,不存在则插入(默认)
  * - empty: 清空字段值(要求 CSV 对应列为空)
- * 
+ *
  * 工作流程:
  * 1. 初始化:验证参数,统计 CSV 行数
  * 2. 获取字段元数据:字段类型、名称等
@@ -1799,21 +1932,21 @@ function createClientContext(params, stats, recordIndex, insertBatch, updateBatc
  * 5. 流式读取 CSV:逐行处理,累积批次
  * 6. 批量提交:达到批次大小时提交更新/插入操作
  * 7. 完成:刷新剩余批次,保存最终统计
- * 
+ *
  * 进度回调:
  * - phase: 'initializing' | 'resolving-links' | 'indexing' | 'running' | 'finalizing' | 'completed'
  * - message: 进度消息
  * - stats: 统计对象
- * 
+ *
  * 错误处理:
  * - 字段验证失败:抛出错误
  * - 行处理失败:记录到 stats.failures,继续处理
  * - API 调用失败:批量失败时回退到单条提交
- * 
+ *
  * 断点续传:
  * - 定期保存检查点(包含已处理行数和统计信息)
  * - 通过 resumeRow 参数恢复
- * 
+ *
  * @example
  * const stats = await runSync({
  *   client,
@@ -2075,7 +2208,15 @@ async function runSync(params) {
     stats.totalRows += 1;
 
     // ビジネスロジック検証
-    const validationErrors = validateCsvRow(row);
+    const validationErrors = [
+      ...validateCsvRow(row),
+      ...validateEmployeeApproverSelfReference(
+        row,
+        keyMappings,
+        effectiveUpdateMappings,
+        effectiveInsertMappings
+      ),
+    ];
     if (validationErrors.length > 0) {
       for (const ve of validationErrors) {
         pushFailure(stats, rowCounterRef.value, ve.message, row);
@@ -2263,13 +2404,13 @@ async function runSync(params) {
 /**
  * 模块导出
  * 导出同步引擎的主函数
- * 
+ *
  * 导出函数:
  * - runSync: 运行 CSV 到 Lark 多维表格的同步任务
- * 
+ *
  * 使用示例:
  * const { runSync } = require('./sync-engine');
- * 
+ *
  * const stats = await runSync({
  *   client: larkApiClient,
  *   appToken: 'bascn...',
@@ -2286,7 +2427,7 @@ async function runSync(params) {
  *     console.log(`${progress.phase}: ${progress.message}`);
  *   }
  * });
- * 
+ *
  * console.log('同步完成:', stats);
  */
 module.exports = {
