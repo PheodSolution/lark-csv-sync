@@ -4,7 +4,7 @@ const path = require('path');
 // - app: 控制应用程序的生命周期
 // - BrowserWindow: 创建和管理浏览器窗口
 // - dialog: 显示原生系统对话框(如错误提示)
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, shell } = require('electron');
 
 // GUI 服务器配置常量
 // 绑定到本地回环地址,只允许本机访问,提高安全性
@@ -175,6 +175,15 @@ function createMainWindow() {
   // 当窗口内容加载完成且准备显示时触发(避免白屏闪烁)
   mainWindow.once('ready-to-show', () => {
     mainWindow.show(); // 显示窗口
+  });
+
+  // 监听下载事件, 下载完成后打开所在文件夹
+  mainWindow.webContents.session.on('will-download', (event, item, webContents) => {
+    item.once('done', (event, state) => {
+      if (state === 'completed') {
+        shell.showItemInFolder(item.getSavePath());
+      }
+    });
   });
 
   /**
