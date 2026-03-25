@@ -357,12 +357,15 @@
         indeterminate: false,
       };
     }
+    const phaseTotalRows = toSafeInteger(stats.phaseTotalRows);
+    const phaseScannedRows = toSafeInteger(stats.phaseScannedRows);
+
     if (phase === "running") {
       if (estimatedTotalRows > 0) {
         const runningRatio = processedRows / estimatedTotalRows;
         return {
           phaseText: phaseLabel(phase),
-          percent: clampPercent(35 + runningRatio * 60),
+          percent: clampPercent(80 + runningRatio * 15),
           detail:
             "処理中: " +
             processedRows +
@@ -394,16 +397,35 @@
         indeterminate: true,
       };
     }
-    if (phase === "indexing") {
+    if (phase === "resolving-links") {
+      let percent = 10;
+      if (phaseTotalRows > 0) {
+        percent = 10 + (phaseScannedRows / phaseTotalRows) * 35; // 10% -> 45%
+      }
       return {
         phaseText: phaseLabel(phase),
-        percent: clampPercent(24 + Math.min(8, indexedRows / 1000)),
+        percent: clampPercent(percent),
+        detail: data.message || "関連フィールド解析中...",
+        indeterminate: phaseTotalRows === 0 && phaseScannedRows === 0,
+      };
+    }
+    if (phase === "indexing") {
+      let percent = 45;
+      if (phaseTotalRows > 0) {
+        percent = 45 + (phaseScannedRows / phaseTotalRows) * 35; // 45% -> 80%
+      } else if (indexedRows > 0) {
+        // Fallback for cases where total is unknown
+        percent = 45 + Math.min(30, (indexedRows / 10000) * 35);
+      }
+      return {
+        phaseText: phaseLabel(phase),
+        percent: clampPercent(percent),
         detail:
           data.message ||
           (indexedRows > 0
             ? "索引済みレコード: " + indexedRows
             : "既存レコードを索引中..."),
-        indeterminate: indexedRows === 0,
+        indeterminate: phaseTotalRows === 0 && indexedRows === 0,
       };
     }
     return {

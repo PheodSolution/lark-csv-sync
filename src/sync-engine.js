@@ -435,6 +435,7 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
       });
 
       const items = Array.isArray(data.items) ? data.items : [];
+      const total = typeof data.total === 'number' ? data.total : 0;
 
       // 处理每条记录
       for (const item of items) {
@@ -490,6 +491,11 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
           (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
           '\n'
         );
+        emitProgress(onProgress, {
+          phase: 'resolving-links',
+          message: `関連テーブルスキャン中... (${scanned}${total > 0 ? ` / ${total}` : ''} レコード)`,
+          stats: { phaseScannedRows: scanned, phaseTotalRows: total },
+        });
       }
 
       // 处理分页
@@ -1365,6 +1371,7 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
       fieldNames,
     });
     const items = Array.isArray(data.items) ? data.items : [];
+    const total = typeof data.total === 'number' ? data.total : 0;
 
     // 处理每条记录
     for (const item of items) {
@@ -1410,8 +1417,8 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
       );
       emitProgress(onProgress, {
         phase: 'indexing',
-        message: `キーインデックス構築中... スキャン済み: ${scannedCount}、インデックス済み: ${indexedCount}`,
-        stats,
+        message: `キーインデックス構築中... (スキャン済み: ${scannedCount}${total > 0 ? ` / ${total}` : ''})`,
+        stats: { ...stats, phaseScannedRows: scannedCount, phaseTotalRows: total },
       });
     }
 
@@ -1488,6 +1495,7 @@ async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMapp
       pageSize: 500,
     });
     const items = Array.isArray(data.items) ? data.items : [];
+    const total = typeof data.total === 'number' ? data.total : 0;
 
     // 处理每条记录
     for (const item of items) {
@@ -1533,8 +1541,8 @@ async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMapp
       );
       emitProgress(onProgress, {
         phase: 'indexing',
-        message: `フォールバックインデックス中... スキャン済み: ${scannedCount}、インデックス済み: ${indexedCount}`,
-        stats,
+        message: `フォールバックインデックス中... (スキャン済み: ${scannedCount}${total > 0 ? ` / ${total}` : ''})`,
+        stats: { ...stats, phaseScannedRows: scannedCount, phaseTotalRows: total },
       });
     }
 
