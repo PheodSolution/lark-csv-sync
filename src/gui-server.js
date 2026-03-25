@@ -1256,13 +1256,19 @@ app.get('/api/auth/session/:id', (req, res) => {
  * 上传 CSV 文件
  * 使用 multer 处理文件上传,保存到临时目录
  */
-app.post('/api/upload', upload.single('csvFile'), (req, res) => {
+app.post('/api/upload', upload.single('csvFile'), async (req, res) => {
   try {
     if (!req.file) {
       throw new Error('CSVファイルを選択してください');
     }
     const originalName = normalizeUploadFileName(req.file.originalname);
     const uploadId = crypto.randomUUID();
+
+    // Count data rows (total lines - 1 for header)
+    const content = fs.readFileSync(req.file.path, 'utf8');
+    const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+    const rowCount = Math.max(0, lines.length - 1);
+
     uploads.set(uploadId, {
       id: uploadId,
       path: req.file.path,
@@ -1277,6 +1283,7 @@ app.post('/api/upload', upload.single('csvFile'), (req, res) => {
         uploadId,
         originalName,
         size: req.file.size,
+        rowCount,
       },
     });
   } catch (error) {

@@ -1404,7 +1404,7 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
     // 每 5000 条输出进度
     if (scannedCount > 0 && scannedCount % 5000 === 0) {
       process.stdout.write(
-        `[インデックス] ${scannedCount} レコードをスキャン。インデックス済み: ${indexedCount}` +
+        `[検索] ${scannedCount} レコードをスキャン。インデックス済み: ${indexedCount}` +
         (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
         '\n'
       );
@@ -1653,7 +1653,7 @@ async function flushUpdateBatch(ctx, forceSingle = false) {
     } catch (error) {
       // 批量失败,回退到单条提交
       logMessage(
-        `[warn] update batch failed (${chunk.length}), fallback to single: ${toErrorMessage(error)}\n`
+        `[ワーニング] データ更新失敗 (${chunk.length}), 個別に再実行します: ${toErrorMessage(error)}\n`
       );
       for (const item of chunk) {
         try {
@@ -1806,7 +1806,7 @@ async function flushInsertBatch(ctx, forceSingle = false) {
     } catch (error) {
       // 批量失败,回退到单条提交
       logMessage(
-        `[warn] insert batch failed (${chunk.length}), fallback to single: ${toErrorMessage(error)}\n`
+        `[ワーニング] データ追加失敗 (${chunk.length}), 個別に再実行します: ${toErrorMessage(error)}\n`
       );
       for (const item of chunk) {
         try {
@@ -2030,7 +2030,7 @@ async function runSync(params) {
   const fieldMetaByName = buildFieldMetaByName(fieldMetas);
   if (blockedUpdateFields.length > 0) {
     logMessage(
-      `[warn] blocked protected update fields: ${Array.from(new Set(blockedUpdateFields)).join(', ')}\n`
+      `[ワーニング] protected update fields: ${Array.from(new Set(blockedUpdateFields)).join(', ')}\n`
     );
   }
   if (mode !== MODE_INSERT && effectiveUpdateMappings.length === 0) {
@@ -2071,10 +2071,10 @@ async function runSync(params) {
 
   let recordIndex = new Map();
   if (mode !== MODE_INSERT) {
-    logMessage('[インデックス] 既存レコードからキーインデックスを構築中...\n');
+    logMessage('[検索] 既存レコードを検索中...\n');
     emitProgress(onProgress, {
       phase: 'indexing',
-      message: '既存レコードを索引中...',
+      message: '既存レコードを検索中...',
       stats,
     });
     let indexResult;
@@ -2112,13 +2112,13 @@ async function runSync(params) {
     recordIndex = indexResult.recordIndex;
     stats.indexedRows = indexResult.indexedCount;
     logMessage(
-      `[インデックス] 完了。スキャン済み: ${indexResult.scannedCount} レコード、インデックス登録: ${stats.indexedRows}` +
+      `[検索] スキャン済み: ${indexResult.scannedCount} レコード、インデックス登録: ${stats.indexedRows}` +
       (indexResult.duplicateCount > 0 ? ` (重複除外: ${indexResult.duplicateCount})` : '') +
       '\n'
     );
     emitProgress(onProgress, {
       phase: 'indexing',
-      message: `インデックス登録完了: ${stats.indexedRows} 行`,
+      message: `検索完了: ${stats.indexedRows} 行`,
       stats,
     });
   }
@@ -2170,9 +2170,9 @@ async function runSync(params) {
 
     if (currentRow % 1000 === 0 && currentRow > 0 && currentRow !== lastProgressLogRow) {
       lastProgressLogRow = currentRow;
-      logMessage(
-        `[progress] csv=${currentRow} inserted=${stats.insertedRows} updated=${stats.updatedRows} failed=${stats.failedRows} skipped=${stats.skippedRows}\n`
-      );
+      // logMessage(
+      //   `[progress] csv=${currentRow} inserted=${stats.insertedRows} updated=${stats.updatedRows} failed=${stats.failedRows} skipped=${stats.skippedRows}\n`
+      // );
     }
 
     emitProgress(onProgress, {

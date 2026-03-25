@@ -19,6 +19,7 @@
       <div class="actions-inline">
         <button id="editConfigBtn" type="button" class="button">設定</button>
         <button id="loginBtn" type="button" class="button primary">ログイン</button>
+        <button id="logoutBtn" type="button" class="button danger hidden">ログアウト</button>
         <span id="loginStatus" class="tip">未ログイン</span>
       </div>
     </section>
@@ -27,7 +28,7 @@
     <section class="card">
       <h2>2. CSVファイルを選択</h2>
       <div class="actions-inline">
-        <input id="csvFile" type="file" accept=".csv,text/csv" />
+        <input id="csvFile" type="file" accept=".csv,text/csv" disabled />
         <span id="csvInfo" class="csv-info">未選択</span>
         <button id="startBtn" type="button" class="button primary" disabled>同期開始</button>
       </div>
@@ -104,15 +105,16 @@
     <!-- ===== 区域 8: 执行状态和统计信息 ===== -->
     <section class="card">
       <h2>3. 実行ステータス</h2>
-      <!-- 状态徽章和文本 -->
+      <!-- 状态徽章、文本、错误CSV下载 -->
       <div class="status-line">
         <span id="statusBadge" class="badge badge-idle">待機中</span>
         <span id="statusText" class="tip">Larkにログインし、CSVファイルを選択してください。</span>
+        <a id="errorCsvLink" class="button danger hidden" style="margin-left: auto;" download>エラーログダウンロード</a>
       </div>
       <!-- 进度条面板 -->
       <div class="progress-panel">
         <div class="progress-head">
-          <span id="progressPhase" class="progress-phase">待機中</span>
+          <span id="progressPhase" class="progress-phase" style="display: none;">待機中</span>
           <span id="progressPercent" class="progress-percent">0%</span>
         </div>
         <div id="progressTrack" class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100"
@@ -130,10 +132,7 @@
         <div><span>スキップ</span><strong id="stSkipped">0</strong></div>
         <div  style="display: none;"><span>索引件数</span><strong id="stIndexed">0</strong></div>
       </div>
-      <!-- 错误 CSV 下载链接 -->
-      <div class="actions-inline">
-        <a id="errorCsvLink" class="button danger hidden" download>エラーログダウンロード</a>
-      </div>
+
     </section>
     <section class="card">
       <!-- 実行ログ（詳細） -->

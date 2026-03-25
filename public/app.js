@@ -99,6 +99,7 @@
     configModalSaveBtn: document.getElementById("configModalSaveBtn"),   // 弹窗保存按钮
     // 登录相关
     loginBtn: document.getElementById("loginBtn"),                     // 登录按钮
+    logoutBtn: document.getElementById("logoutBtn"),                   // 登出按钮
     loginStatus: document.getElementById("loginStatus"),               // 登录状态显示
     // CSV 文件上传相关
     csvFile: document.getElementById("csvFile"),                       // CSV 文件选择输入框
@@ -458,6 +459,49 @@
   }
 
   /**
+   * 画面全体を初期状態にリセット
+   * ログアウト時などに使用
+   */
+  function resetAllState() {
+    // 轮询停止
+    stopPolling();
+    // 認証情報クリア
+    state.authSessionId = "";
+    state.authUserName = "";
+    // アップロード・ジョブ情報クリア
+    state.uploadId = "";
+    state.jobId = "";
+    state.lastLogIndex = 0;
+    // テーブル・フィールド・CSV情報クリア
+    state.tables = [];
+    state.selectedTableId = "";
+    state.fieldNames = [];
+    state.fieldTypes = {};
+    state.csvHeaders = [];
+    state.autoMappings = [];
+    state.preset = null;
+    state.mappingLocked = false;
+    // マッピングリセット
+    state.keyMappings = [createMappingRow()];
+    state.updateMappings = [createMappingRow()];
+    state.insertMappings = [createMappingRow()];
+    // UI リセット
+    el.csvFile.value = "";
+    el.csvInfo.textContent = "未選択";
+    el.errorCsvLink.classList.add("hidden");
+    if (el.logWindow) el.logWindow.innerHTML = "";
+    showError("");
+    showInfo("");
+    resetStats();
+    updateLoginStatus();
+    renderTableOptions();
+    renderMappings();
+    refreshModeView();
+    setStatus("idle", "Larkにログインし、CSVファイルを選択してください。");
+    refreshControls();
+  }
+
+  /**
    * 更新统计数字显示
    * @param {Object} stats - 统计数据对象
    */
@@ -494,13 +538,17 @@
     el.statusText.textContent = text || "";
   }
 
-  /** 更新登录状态显示（已登录/未登录） */
+  /** 更新登录状态显示（已登录/未登录）、切换ログイン/ログアウトボタン表示 */
   function updateLoginStatus() {
     if (state.authSessionId) {
       el.loginStatus.textContent = "ログイン済み: " + (state.authUserName || "Lark User");
+      el.loginBtn.classList.add("hidden");
+      el.logoutBtn.classList.remove("hidden");
       return;
     }
     el.loginStatus.textContent = "未ログイン";
+    el.loginBtn.classList.remove("hidden");
+    el.logoutBtn.classList.add("hidden");
   }
 
   /** 更新配置按钮的标签（根据是否已保存配置） */
@@ -616,7 +664,8 @@
     el.configModalSaveBtn.disabled = state.busy || state.running;
 
     el.loginBtn.disabled = state.busy || state.running;
-    el.csvFile.disabled = state.busy || state.running;
+    el.logoutBtn.disabled = state.busy || state.running;
+    el.csvFile.disabled = state.busy || state.running || !state.authSessionId;
     el.tableId.disabled = state.busy || state.running || state.tables.length === 0 || lockByPreset;
     el.mode.disabled = state.busy || state.running || lockByPreset;
     el.addKeyMappingBtn.disabled = state.busy || state.running || lockByPreset;
@@ -1041,12 +1090,12 @@
           });
         }
 
-        log(
-          "プリセット適用: " +
-            (state.preset.name || state.preset.id || "不明") +
-            " / ファイル=" +
-            (state.preset.fileName || "")
-        );
+        // log(
+        //   "プリセット適用: " +
+        //     (state.preset.name || state.preset.id || "不明") +
+        //     " / ファイル=" +
+        //     (state.preset.fileName || "")
+        // );
       }
 
       state.keyMappings = normalizeRows(state.keyMappings);
@@ -1069,14 +1118,14 @@
           (state.preset && state.preset.name ? " / プリセット: " + state.preset.name : "") +
           (state.mappingLocked ? " / 読み取り専用" : "")
       );
-      log(
-        "スキーマ読込完了: テーブル=" +
-          tableLabel +
-          ", CSV列数=" +
-          state.csvHeaders.length +
-          ", Baseフィールド数=" +
-          state.fieldNames.length
-      );
+      // log(
+      //   "スキーマ読込完了: テーブル=" +
+      //     tableLabel +
+      //     ", CSV列数=" +
+      //     state.csvHeaders.length +
+      //     ", Baseフィールド数=" +
+      //     state.fieldNames.length
+      // );
     } finally {
       state.busy = false;
       refreshControls();
@@ -1120,8 +1169,9 @@
           ? Number(data.size)
           : Number(file.size || 0);
       el.csvInfo.textContent = displayName + " (" + (sizeBytes / 1024 / 1024).toFixed(2) + " MB)";
-      log("CSVアップロード完了: " + displayName);
-      setStatus("idle", "CSVアップロード完了。スキーマを確認してください。");
+      const rowCount = toSafeInteger(data.rowCount);
+      log("CSV読込完了: " + displayName + "（行数: " + rowCount + "）");
+      setStatus("idle", "CSV読込済み" + "（行数: " + rowCount + "）"); 
     } finally {
       state.busy = false;
       refreshControls();
@@ -1159,7 +1209,6 @@
         "ログインウィンドウを開けませんでした。ポップアップを許可して再試行してください。"
       );
     }
-    log("ログインウィンドウを開きました。");
   }
 
   /**
@@ -1489,11 +1538,20 @@
       }
     });
 
+    el.logoutBtn.addEventListener("click", function () {
+      log("ログアウトしました。");
+      resetAllState();
+    });
+
     el.csvFile.addEventListener("change", function (event) {
       const file =
         event.target && event.target.files && event.target.files.length
           ? event.target.files[0]
           : null;
+      // 新しいファイル選択時に進捗情報をリセット
+      resetStats();
+      el.errorCsvLink.classList.add("hidden");
+      setStatus("idle", "CSVファイルをアップロード中...");
       uploadCsv(file).catch(function (error) {
         const message = toErrorMessage(error);
         showError(message);
@@ -1583,7 +1641,6 @@
       updateConfigButtonLabel();
       closeConfigModal();
       refreshControls();
-      log("デフォルト設定読込完了。");
     } catch (error) {
       log("デフォルト読込失敗: " + toErrorMessage(error), true);
     }
