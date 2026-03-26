@@ -890,7 +890,7 @@ function buildErrorCsv(stats, csvOriginalName) {
     Object.keys(f.rowData).forEach((key) => columnSet.add(key));
   });
   const csvColumns = Array.from(columnSet);
-  const allColumns = [...csvColumns, 'error'];
+  const allColumns = [...csvColumns, "エラー情報"];
 
   const headerLine = allColumns.map((col) => escapeCsvCell(col)).join(',');
   const dataLines = failedWithData.map((f) => {

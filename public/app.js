@@ -219,7 +219,10 @@
    * @param {boolean} isError - 是否为错误类型的日志
    */
   function log(message, isError = false) {
-    const now = new Date().toLocaleTimeString("ja-JP", { hour12: false });
+    const d = new Date();
+    const now = [d.getHours(), d.getMinutes(), d.getSeconds()]
+      .map((v) => String(v).padStart(2, "0"))
+      .join(":");
     const logText = "[" + now + "] " + message;
     console.log("[lark-sync]" + logText);
     
