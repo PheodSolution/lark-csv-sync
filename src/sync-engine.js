@@ -181,7 +181,7 @@ function validateCoordinateRange(longitude, latitude) {
   }
 
   if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
-    throw new Error(`location coordinate out of range: ${longitude},${latitude}`);
+    throw new Error(`場所の座標が範囲外です: ${longitude},${latitude}`);
   }
 
   return { longitude, latitude };
@@ -190,7 +190,7 @@ function validateCoordinateRange(longitude, latitude) {
 function normalizeLocationCoordinate(raw) {
   const parts = String(raw || '').split(',');
   if (parts.length !== 2) {
-    throw new Error(`location coordinate must be "longitude,latitude": ${raw}`);
+    throw new Error(`場所の座標は "経度,纬度" 形式でなければなりません: ${raw}`);
   }
 
   const coordinate = validateCoordinateRange(
@@ -198,7 +198,7 @@ function normalizeLocationCoordinate(raw) {
     Number(parts[1].trim())
   );
   if (!coordinate) {
-    throw new Error(`location coordinate is invalid: ${raw}`);
+    throw new Error(`場所の座標が不正です: ${raw}`);
   }
 
   return buildCoordinateString(coordinate.longitude, coordinate.latitude);
@@ -317,7 +317,7 @@ function buildAddressOnlyLocation(rawAddress, coordinateHint, fullAddressOverrid
   if (location) return location;
 
   const addressText = toTrimmedString(fullAddressOverride) || rawText;
-  throw new Error(`field "位置" could not build coordinate from address: ${addressText}`);
+  throw new Error(`フィールド "位置" の住所から座標を構築できませんでした: ${addressText}`);
 }
 
 function buildLocationCellValue(raw, previousCellValue, rowCoordinateHint) {
@@ -454,7 +454,7 @@ function createJapanAddressGeocoder() {
   const resolve = async (address) => {
     const trimmedAddress = toTrimmedString(address);
     if (!trimmedAddress) {
-      throw new Error('address is empty');
+      throw new Error('住所が空です');
     }
 
     const cacheKey = normalizeText(trimmedAddress);
@@ -490,17 +490,17 @@ function createJapanAddressGeocoder() {
         });
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          throw new Error(`HTTPエラー ${response.status}`);
         }
 
         const payload = await response.json();
         if (!Array.isArray(payload) || payload.length === 0) {
-          throw new Error('no coordinates found');
+          throw new Error('座標が見つかりませんでした');
         }
 
         const first = payload[0];
         if (!first || typeof first !== 'object' || Array.isArray(first)) {
-          throw new Error('unexpected response shape');
+          throw new Error('予期しないレスポンス形式です');
         }
 
         const coordinates =
@@ -510,14 +510,14 @@ function createJapanAddressGeocoder() {
             ? first.geometry.coordinates
             : null;
         if (!coordinates || coordinates.length < 2) {
-          throw new Error('response coordinates missing');
+          throw new Error('レスポンスに座標が含まれていません');
         }
 
         const longitude = toTrimmedString(coordinates[0]);
         const latitude = toTrimmedString(coordinates[1]);
         return normalizeLocationCoordinate(`${longitude},${latitude}`);
       } catch (error) {
-        throw new Error(`GSI address search failed: ${toErrorMessage(error)}`);
+        throw new Error(`国土地理院の住所検索に失敗しました: ${toErrorMessage(error)}`);
       } finally {
         clearTimeout(timeoutId);
       }
@@ -582,7 +582,7 @@ async function appendDerivedLocationField(
   }
   if (!coordinate) {
     const suffix = lastError ? ` (${toErrorMessage(lastError)})` : '';
-    throw new Error(`field "位置" could not geocode from 郵便番号/住所: ${query}${suffix}`);
+    throw new Error(`フィールド "位置" の郵便番号/住所からジオコーディングできませんでした: ${query}${suffix}`);
   }
 
   // geocode 时可以使用“邮便番号 + 住所”的查询串，但写回位置字段时，
@@ -607,7 +607,7 @@ async function convertLocationFieldValue(
   } catch (error) {
     const addressCandidate = extractAddressCandidateFromRawLocationInput(text);
     if (!addressCandidate || !locationGeocoder || typeof locationGeocoder.resolve !== 'function') {
-      throw new Error(`field "${fieldName}" ${toErrorMessage(error)}`);
+      throw new Error(`フィールド "${fieldName}" でエラーが発生しました: ${toErrorMessage(error)}`);
     }
 
     try {
@@ -615,7 +615,7 @@ async function convertLocationFieldValue(
       return coordinate;
     } catch (geocodeError) {
       throw new Error(
-        `field "${fieldName}" could not geocode "${addressCandidate}": ${toErrorMessage(geocodeError)}`
+        `フィールド "${fieldName}" で "${addressCandidate}" をジオコーディングできませんでした: ${toErrorMessage(geocodeError)}`
       );
     }
   }
@@ -742,7 +742,7 @@ function resolveNextPageToken({
 
   // 如果 has_more=true 但 page_token 为空,抛出错误
   if (!nextPageToken) {
-    throw new Error(`${stageLabel} aborted: Lark API returned has_more=true but page_token is empty`);
+    throw new Error(`${stageLabel} 中断: Lark APIから has_more=true が返されましたが、page_token が空です`);
   }
 
   // 检查 token 是否重复
@@ -765,7 +765,7 @@ function resolveNextPageToken({
   // 检查是否超过最大重试次数
   if (attempt > PAGE_TOKEN_REPEAT_RETRY_LIMIT) {
     throw new Error(
-      `${stageLabel} aborted: repeated next page token returned by Lark API (${nextPageToken}) after ${PAGE_TOKEN_REPEAT_RETRY_LIMIT} retries`
+      `${stageLabel} 中断: ${PAGE_TOKEN_REPEAT_RETRY_LIMIT} 回の再試行後も Lark API から重複した次ページトークン (${nextPageToken}) が返されました`
     );
   }
 
@@ -855,7 +855,7 @@ async function buildLinkResolvers(
     // 查找表名
     const linkedTable = allTables.find((t) => t.table_id === linkedTableId);
     if (!linkedTable || !linkedTable.name) {
-      throw new Error(`关联表解析失败: 无法找到 table_id 为 ${linkedTableId} 的关联表名称`);
+      throw new Error(`関連テーブルの解析に失敗しました: table_id ${linkedTableId} のテーブル名が見つかりません`);
     }
 
     // 标准化表名用于匹配 (移除空格)
@@ -873,7 +873,7 @@ async function buildLinkResolvers(
     }
 
     if (!requiredFields) {
-      throw new Error(`关联表解析失败: 关联表 "${linkedTable.name}" 不在支持的配置范围内 (支持: ${Object.keys(TARGET_FIELDS_MAP).join(', ')})`);
+      throw new Error(`関連テーブルの解析に失敗しました: 関連テーブル "${linkedTable.name}" はサポート対象外です (サポート対象: ${Object.keys(TARGET_FIELDS_MAP).join(', ')})`);
     }
 
     seen.add(normalizeText(mapping.fieldName));
@@ -896,7 +896,7 @@ async function buildLinkResolvers(
 
     // 如果没有能匹配上的必须字段,抛出错误
     if (searchableFields.length === 0) {
-      throw new Error(`关联表解析失败: 在关联表 "${matchedTableName}" 中无法找到任何需要的特定字段 (${requiredFields.join(', ')})`);
+      throw new Error(`関連テーブルの解析に失敗しました: "${matchedTableName}" に必要なフィールドが見つかりません (${requiredFields.join(', ')})`);
     }
 
     logMessage(
@@ -1083,7 +1083,7 @@ function convertRawValue(raw, fieldMeta, fieldName, linkResolvers) {
 
       // 无法解析,抛出错误
       throw new Error(
-        `field "${fieldName}" could not resolve "${text}" in linked table ${resolver.linkedTableName} via fields [${resolver.searchableFields.join(', ')}]`
+        `フィールド "${fieldName}" の値 "${text}" を関連テーブル "${resolver.linkedTableName}" で解決できませんでした(検索フィールド: [${resolver.searchableFields.join(', ')}])`
       );
     }
 
@@ -1567,21 +1567,21 @@ function validateMappings(fieldNames, keyMappings, updateMappings, insertMapping
     (mapping) => !normalizedFieldNames.has(normalizeText(mapping.fieldName))
   );
   if (missingKeyField) {
-    throw new Error(`Key field does not exist in table: ${missingKeyField.fieldName}`);
+    throw new Error(`キーフィールドがテーブルに存在しません: ${missingKeyField.fieldName}`);
   }
 
   const missingUpdateField = updateMappings.find(
     (mapping) => !normalizedFieldNames.has(normalizeText(mapping.fieldName))
   );
   if (missingUpdateField) {
-    throw new Error(`Update field does not exist in table: ${missingUpdateField.fieldName}`);
+    throw new Error(`更新フィールドがテーブルに存在しません: ${missingUpdateField.fieldName}`);
   }
 
   const missingInsertField = insertMappings.find(
     (mapping) => !normalizedFieldNames.has(normalizeText(mapping.fieldName))
   );
   if (missingInsertField) {
-    throw new Error(`Insert field does not exist in table: ${missingInsertField.fieldName}`);
+    throw new Error(`追加フィールドがテーブルに存在しません: ${missingInsertField.fieldName}`);
   }
 }
 
@@ -1987,7 +1987,7 @@ async function buildRecordIndex(
       );
       emitProgress(onProgress, {
         phase: 'indexing',
-        message: `キーインデックス構築中... (スキャン済み: ${scannedCount}${total > 0 ? ` / ${total}` : ''})`,
+        message: `キーインデックス構築中... (スキャン済み: ${scannedCount}${total > 0 ? ` / ${total}` : ''} レコード)`,
         stats: { ...stats, phaseScannedRows: scannedCount, phaseTotalRows: total },
       });
     }
@@ -2236,9 +2236,9 @@ async function flushUpdateBatch(ctx, forceSingle = false) {
 
     // 多条记录,批量提交
     try {
-      console.log(
-        'update batch:::::::::::::::::' + JSON.stringify(requestRecords)
-      );
+      // console.log(
+      //   'update batch:::::::::::::::::' + JSON.stringify(requestRecords)
+      // );
       await client.batchUpdateRecords(appToken, tableId, requestRecords);
       stats.updatedRows += chunk.length;
       console.log(
@@ -2624,7 +2624,7 @@ async function runSync(params) {
   }
   emitProgress(onProgress, {
     phase: 'initializing',
-    message: `CSV rows: ${stats.estimatedTotalRows}`,
+    message: `CSV行数: ${stats.estimatedTotalRows}`,
     stats,
   });
 
@@ -2633,17 +2633,17 @@ async function runSync(params) {
   const fieldMetaByName = buildFieldMetaByName(fieldMetas);
   if (blockedUpdateFields.length > 0) {
     logMessage(
-      `[ワーニング] protected update fields: ${Array.from(new Set(blockedUpdateFields)).join(', ')}\n`
+      `[ワーニング] 保護された更新フィールド: ${Array.from(new Set(blockedUpdateFields)).join(', ')}\n`
     );
   }
   if (mode !== MODE_INSERT && effectiveUpdateMappings.length === 0) {
     throw new Error('Keyフィールドを除外した結果、更新可能なマッピングがありません');
   }
   if ((mode === MODE_INSERT || mode === MODE_UPSERT) && effectiveInsertMappings.length === 0) {
-    throw new Error('No insert mappings configured for insert/upsert mode');
+    throw new Error('insert/upsertモードの追加マッピングが設定されていません');
   }
   if (mode !== MODE_INSERT && (!Array.isArray(keyMappings) || keyMappings.length === 0)) {
-    throw new Error('Key mappings are required for update/upsert/empty mode');
+    throw new Error('update/upsert/emptyモードにはキーマッピングが必要です');
   }
   validateMappings(
     fieldNames,
@@ -2788,8 +2788,8 @@ async function runSync(params) {
       phase: 'running',
       message:
         stats.estimatedTotalRows > 0
-          ? `Processed ${currentRow}/${stats.estimatedTotalRows} rows`
-          : `Processed ${currentRow} rows`,
+          ? `${currentRow}/${stats.estimatedTotalRows} 行を処理済み`
+          : `${currentRow} 行を処理済み`,
       stats,
     });
 
@@ -2801,8 +2801,8 @@ async function runSync(params) {
     phase: 'running',
     message:
       stats.estimatedTotalRows > 0
-        ? `Starting row processing (0/${stats.estimatedTotalRows})`
-        : 'Starting row processing...',
+        ? `行の処理を開始します (0/${stats.estimatedTotalRows})`
+        : '行の処理を開始します...',
     stats,
   });
 
