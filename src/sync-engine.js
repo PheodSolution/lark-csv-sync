@@ -818,7 +818,14 @@ function resolveNextPageToken({
  * - 使用 Set 去重记录ID
  * - 每 5000 条输出一次进度
  */
-async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings, onProgress) {
+async function buildLinkResolvers(
+  client,
+  appToken,
+  fieldMetaByName,
+  allMappings,
+  onProgress,
+  logMessage
+) {
   const resolvers = new Map(); // 解析器映射表
   const seen = new Set();      // 已处理的字段名集合
 
@@ -871,7 +878,7 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
 
     seen.add(normalizeText(mapping.fieldName));
 
-    process.stdout.write(
+    logMessage(
       `[連携] リンクフィールド "${mapping.fieldName}" -> テーブル: ${matchedTableName} (${linkedTableId})\n`
     );
 
@@ -892,8 +899,8 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
       throw new Error(`关联表解析失败: 在关联表 "${matchedTableName}" 中无法找到任何需要的特定字段 (${requiredFields.join(', ')})`);
     }
 
-    process.stdout.write(
-      `[連携] 関連テーブル ${linkedTableId} をスキャン中。フィールド: ${searchableFields.join(', ')}\n`
+    logMessage(
+      `[連携] 関連テーブル(${matchedTableName} ): スキャン中。フィールド: ${searchableFields.join(', ')}\n`
     );
 
     // 建立值到记录ID的映射
@@ -969,8 +976,8 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
 
       // 每 5000 条输出一次进度
       if (scanned > 0 && scanned % 5000 === 0) {
-        process.stdout.write(
-          `[連携] 関連テーブル: ${scanned} レコードをスキャン完了` +
+        logMessage(
+          `[連携] 関連テーブル(${matchedTableName} ): ${scanned} レコードをスキャン完了` +
           (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
           '\n'
         );
@@ -1003,13 +1010,6 @@ async function buildLinkResolvers(client, appToken, fieldMetaByName, allMappings
 
       pageToken = pageDecision.nextPageToken;
     }
-
-    // 完了ログを出力
-    process.stdout.write(
-      `[連携] "${mapping.fieldName}" のリゾルバー構築完了: ${valueToIds.size} ユニーク値 / ${scanned} レコード` +
-      (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
-      '\n'
-    );
 
     // 保存解析器
     resolvers.set(normalizeText(mapping.fieldName), {
@@ -1083,7 +1083,7 @@ function convertRawValue(raw, fieldMeta, fieldName, linkResolvers) {
 
       // 无法解析,抛出错误
       throw new Error(
-        `field "${fieldName}" could not resolve "${text}" in linked table ${resolver.linkedTableId} via fields [${resolver.searchableFields.join(', ')}]`
+        `field "${fieldName}" could not resolve "${text}" in linked table ${resolver.linkedTableName} via fields [${resolver.searchableFields.join(', ')}]`
       );
     }
 
@@ -1906,7 +1906,15 @@ function shouldSkipBecauseNoWritableField(fields, clearEmpty) {
  * );
  * // result.recordIndex: Map { 'abc||#||123' => ['rec001'] }
  */
-async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, onProgress) {
+async function buildRecordIndex(
+  client,
+  appToken,
+  tableId,
+  keyMappings,
+  stats,
+  onProgress,
+  logMessage
+) {
   const recordFieldsById = new Map();
   const recordIndex = new Map();      // 主键 -> 记录ID数组
   const seenPageTokens = new Set();   // 已见过的分页 token
@@ -1972,7 +1980,7 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
 
     // 每 5000 条输出进度
     if (scannedCount > 0 && scannedCount % 5000 === 0) {
-      process.stdout.write(
+      logMessage(
         `[検索] ${scannedCount} レコードをスキャン。インデックス済み: ${indexedCount}` +
         (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
         '\n'
@@ -2036,7 +2044,15 @@ async function buildRecordIndex(client, appToken, tableId, keyMappings, stats, o
  *   client, appToken, tableId, keyMappings, stats, onProgress
  * );
  */
-async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMappings, stats, onProgress) {
+async function buildRecordIndexViaListRecords(
+  client,
+  appToken,
+  tableId,
+  keyMappings,
+  stats,
+  onProgress,
+  logMessage
+) {
   const recordFieldsById = new Map();
   const recordIndex = new Map();
   const seenPageTokens = new Set();
@@ -2098,8 +2114,8 @@ async function buildRecordIndexViaListRecords(client, appToken, tableId, keyMapp
 
     // 每 5000 条输出进度
     if (scannedCount > 0 && scannedCount % 5000 === 0) {
-      process.stdout.write(
-        `[インデックス:フォールバック] ${scannedCount} レコードをスキャン。インデックス済み: ${indexedCount}` +
+      logMessage(
+        `[検索] ${scannedCount} レコードをスキャン。インデックス済み: ${indexedCount}` +
         (duplicateCount > 0 ? ` (重複除外: ${duplicateCount})` : '') +
         '\n'
       );
@@ -2651,9 +2667,9 @@ async function runSync(params) {
     client, appToken, fieldMetaByName, allMappingsForLink, onProgress, logMessage
   );
   if (linkResolvers.size > 0) {
-    logMessage(`[連携] ${linkResolvers.size} 件のリンクリゾルバー準備完了\n`);
+    logMessage(`[検索] ${linkResolvers.size} 件のリンクリゾルバー準備完了\n`);
   } else {
-    logMessage('[連携] マッピング内にリンクフィールドはなし\n');
+    logMessage('[検索] マッピング内にリンクフィールドはなし\n');
   }
 
   let recordIndex = new Map();
@@ -2673,7 +2689,8 @@ async function runSync(params) {
         tableId,
         keyMappings,
         stats,
-        onProgress
+        onProgress,
+        logMessage
       );
     } catch (error) {
       if (!isRepeatedPageTokenError(error) || typeof client.listRecords !== 'function') {
@@ -2694,7 +2711,8 @@ async function runSync(params) {
         tableId,
         keyMappings,
         stats,
-        onProgress
+        onProgress,
+        logMessage
       );
     }
     recordIndex = indexResult.recordIndex;

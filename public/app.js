@@ -318,9 +318,9 @@
     const key = String(phase || "").trim().toLowerCase();
     if (key === "queued") return 1;
     if (key === "initializing") return 5;
-    if (key === "resolving-links") return 12;
-    if (key === "indexing") return 24;
-    if (key === "running") return 35;
+    if (key === "resolving-links") return 10;
+    if (key === "indexing") return 70;
+    if (key === "running") return 90;
     if (key === "finalizing") return 96;
     if (key === "completed") return 100;
     return 0;
@@ -368,7 +368,7 @@
         const runningRatio = processedRows / estimatedTotalRows;
         return {
           phaseText: phaseLabel(phase),
-          percent: clampPercent(80 + runningRatio * 15),
+          percent: clampPercent(90 + runningRatio * 6),
           detail:
             "処理中: " +
             processedRows +
@@ -403,7 +403,7 @@
     if (phase === "resolving-links") {
       let percent = 10;
       if (phaseTotalRows > 0) {
-        percent = 10 + (phaseScannedRows / phaseTotalRows) * 35; // 10% -> 45%
+        percent = 10 + (phaseScannedRows / phaseTotalRows) * 60; // 10% -> 70%
       }
       return {
         phaseText: phaseLabel(phase),
@@ -413,12 +413,12 @@
       };
     }
     if (phase === "indexing") {
-      let percent = 45;
+      let percent = 70;
       if (phaseTotalRows > 0) {
-        percent = 45 + (phaseScannedRows / phaseTotalRows) * 35; // 45% -> 80%
+        percent = 70 + (phaseScannedRows / phaseTotalRows) * 20; // 70% -> 90%
       } else if (indexedRows > 0) {
         // Fallback for cases where total is unknown
-        percent = 45 + Math.min(30, (indexedRows / 10000) * 35);
+        percent = 70 + Math.min(15, (indexedRows / 10000) * 20);
       }
       return {
         phaseText: phaseLabel(phase),

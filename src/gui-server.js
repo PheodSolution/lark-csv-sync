@@ -960,9 +960,26 @@ function updateJob(jobId, patch) {
  * @returns {string} HTML 字符串
  */
 function authCallbackHtml(payload) {
-  const title = payload.type === 'lark-auth-success' ? 'ログイン完了' : 'ログイン失敗';
-  const detail = payload.error ? String(payload.error) : '';
+  const isSuccess = payload.type === 'lark-auth-success';
   const serialized = safeJsonForScript(payload);
+
+  if (isSuccess) {
+    return `<!doctype html>
+<html lang="ja">
+<body>
+<script>
+  const data = ${serialized};
+  if (window.opener) {
+    window.opener.postMessage(data, '*');
+  }
+  window.close();
+</script>
+</body>
+</html>`;
+  }
+
+  const title = 'ログイン失敗';
+  const detail = payload.error ? String(payload.error) : '';
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -978,15 +995,15 @@ code{display:block;margin-top:12px;padding:10px;border-radius:8px;background:#f2
 <body>
 <div class="box">
 <h1>${title}</h1>
-<p>このウィンドウは自動で閉じます。</p>
+<p>ログインに失敗しました。詳細は以下のエラーを確認してください。</p>
 ${detail ? `<code>${detail}</code>` : ''}
+<p style="margin-top:12px;font-size:12px;color:#888">このウィンドウは手動で閉じてください。</p>
 </div>
 <script>
   const data = ${serialized};
   if (window.opener) {
     window.opener.postMessage(data, '*');
   }
-  setTimeout(() => window.close(), 1200);
 </script>
 </body>
 </html>`;
