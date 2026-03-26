@@ -320,6 +320,44 @@ function buildAddressOnlyLocation(rawAddress, coordinateHint, fullAddressOverrid
   throw new Error(`field "位置" could not build coordinate from address: ${addressText}`);
 }
 
+function parseLocationCoordinateParts(raw) {
+  const normalized = normalizeLocationCoordinate(raw);
+  const [longitude, latitude] = normalized.split(',').map((item) => Number(item.trim()));
+  return { longitude, latitude };
+}
+
+function findFirstFieldMetaByNames(fieldMetaByName, candidateNames) {
+  for (const candidateName of candidateNames) {
+    const meta = fieldMetaByName.get(normalizeText(candidateName));
+    if (meta && meta.field_name) {
+      return meta;
+    }
+  }
+  return null;
+}
+
+function appendDerivedLongitudeLatitudeFields(fields, fieldMetaByName) {
+  const locationValue = fields['位置'];
+  if (!locationValue) return;
+
+  let coordinate;
+  try {
+    coordinate = parseLocationCoordinateParts(locationValue);
+  } catch {
+    return;
+  }
+
+  const longitudeMeta = findFirstFieldMetaByNames(fieldMetaByName, ['経度', '经度']);
+  if (longitudeMeta && fields[longitudeMeta.field_name] === undefined) {
+    fields[longitudeMeta.field_name] = coordinate.longitude;
+  }
+
+  const latitudeMeta = findFirstFieldMetaByNames(fieldMetaByName, ['緯度', '纬度']);
+  if (latitudeMeta && fields[latitudeMeta.field_name] === undefined) {
+    fields[latitudeMeta.field_name] = coordinate.latitude;
+  }
+}
+
 function buildLocationCellValue(raw, previousCellValue, rowCoordinateHint) {
   const trimmed = toTrimmedString(raw);
   if (!trimmed) {
@@ -1654,6 +1692,7 @@ async function buildFieldsFromRow(
     locationGeocoder,
     previousFields
   );
+  appendDerivedLongitudeLatitudeFields(fields, fieldMetaByName);
   return fields;
 }
 
