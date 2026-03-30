@@ -21,10 +21,10 @@ const RETRYABLE_CODES = new Set([
 /**
  * 延迟函数
  * 返回一个在指定毫秒后 resolve 的 Promise,用于实现异步等待
- * 
+ *
  * @param {number} ms - 延迟的毫秒数
  * @returns {Promise<void>}
- * 
+ *
  * @example
  * await sleep(1000); // 等待 1 秒
  * await sleep(500);  // 等待 0.5 秒
@@ -36,10 +36,10 @@ function sleep(ms) {
 /**
  * 将错误对象转换为字符串消息
  * 统一处理 Error 对象和其他类型的错误值
- * 
+ *
  * @param {Error|any} error - 错误对象或其他值
  * @returns {string} - 错误消息字符串
- * 
+ *
  * @example
  * toErrorMessage(new Error('test'))  // => 'test'
  * toErrorMessage('error string')     // => 'error string'
@@ -53,11 +53,11 @@ function toErrorMessage(error) {
 /**
  * 构建请求错误对象
  * 创建一个带有 retryable 标记的 Error 对象
- * 
+ *
  * @param {string} message - 错误消息
  * @param {boolean} retryable - 是否可重试
  * @returns {Error} - 带有 retryable 属性的 Error 对象
- * 
+ *
  * @example
  * throw buildRequestError('Network error', true);  // 可重试错误
  * throw buildRequestError('Invalid token', false); // 不可重试错误
@@ -71,10 +71,10 @@ function buildRequestError(message, retryable) {
 /**
  * 从 Lark API 响应中提取 data 字段
  * Lark API 响应格式通常为 { code, msg, data },需要解包 data 字段
- * 
+ *
  * @param {Object} payload - API 响应对象
  * @returns {Object} - 解包后的 data 对象,如果不存在则返回原始 payload
- * 
+ *
  * @example
  * unwrapPayload({ code: 0, data: { name: 'test' } })  // => { name: 'test' }
  * unwrapPayload({ name: 'test' })                     // => { name: 'test' }
@@ -92,34 +92,34 @@ function unwrapPayload(payload) {
 /**
  * Lark API 客户端类
  * 封装所有 Lark OpenAPI 调用,提供统一的接口
- * 
+ *
  * 主要功能:
  * 1. 令牌管理:自动获取和缓存 tenant_access_token、app_access_token
  * 2. OAuth 2.0:支持用户授权、令牌交换、令牌刷新
  * 3. 自动重试:内置指数退避重试机制,最多重试 6 次
  * 4. 错误处理:识别可重试错误码,自动刷新过期令牌
  * 5. OIDC 支持:优先使用 OIDC 端点,失败后回退旧版端点
- * 
+ *
  * @class LarkApiClient
  */
 class LarkApiClient {
   /**
    * 构造函数
-   * 
+   *
    * @param {Object} options - 配置选项
    * @param {string} options.appId - Lark 应用 ID(必需)
    * @param {string} options.appSecret - Lark 应用密钥(必需)
    * @param {string} [options.baseUrl='https://open.larksuite.com'] - API 基础地址
    * @param {number} [options.maxRetries=6] - 最大重试次数
    * @param {Function} [options.accessTokenProvider] - 自定义令牌提供函数(用于 user_access_token)
-   * 
+   *
    * @example
    * // 基本用法
    * const client = new LarkApiClient({
    *   appId: 'cli_xxx',
    *   appSecret: 'xxx'
    * });
-   * 
+   *
    * // 使用自定义令牌提供函数(用于 OAuth 场景)
    * const client = new LarkApiClient({
    *   appId: 'cli_xxx',
@@ -134,7 +134,7 @@ class LarkApiClient {
     this.appSecret = options.appSecret;   // Lark 应用密钥
     this.baseUrl = options.baseUrl || 'https://open.larksuite.com'; // API 基础地址
     this.maxRetries = Number.isFinite(options.maxRetries) ? options.maxRetries : 6; // 最大重试次数
-    
+
     // 自定义令牌提供函数(用于 user_access_token 场景)
     this.accessTokenProvider =
       typeof options.accessTokenProvider === 'function'
@@ -144,7 +144,7 @@ class LarkApiClient {
     // 租户令牌缓存
     this.tenantToken = '';              // tenant_access_token
     this.tenantTokenExpireAt = 0;       // 过期时间(Unix 时间戳)
-    
+
     // 应用令牌缓存
     this.appAccessToken = '';           // app_access_token
     this.appAccessTokenExpireAt = 0;    // 过期时间(Unix 时间戳)
@@ -153,13 +153,13 @@ class LarkApiClient {
   /**
    * 发送 POST JSON 请求的通用方法
    * 用于内部调用,不包含重试逻辑
-   * 
+   *
    * @param {string} path - API 路径(相对于 baseUrl)
    * @param {Object} body - 请求体对象
    * @param {Object} [headers={}] - 额外的 HTTP 头
    * @returns {Promise<Object>} - 解包后的响应数据
    * @throws {Error} - 如果请求失败或响应码不为 0
-   * 
+   *
    * @private
    */
   async postJson(path, body, headers = {}) {
@@ -188,30 +188,30 @@ class LarkApiClient {
         `HTTP ${response.status}, code ${payload.code}, msg ${payload.msg || 'unknown'}`
       );
     }
-    
+
     return unwrapPayload(payload); // 返回解包后的数据
   }
 
   /**
    * 获取租户访问令牌(tenant_access_token)
    * 用于应用级别的 API 调用(非用户级别)
-   * 
+   *
    * 令牌缓存策略:
    * - 如果缓存未过期且不强制刷新,直接返回缓存
    * - 提前 60 秒刷新令牌,避免在使用时过期
    * - 默认有效期 7200 秒(2 小时)
-   * 
+   *
    * @param {boolean} [forceRefresh=false] - 是否强制刷新令牌
    * @returns {Promise<string>} - tenant_access_token
    * @throws {Error} - 如果获取失败
-   * 
+   *
    * @example
    * const token = await client.getTenantAccessToken();
    * const newToken = await client.getTenantAccessToken(true); // 强制刷新
    */
   async getTenantAccessToken(forceRefresh = false) {
     const now = Date.now();
-    
+
     // 检查缓存是否有效(提前 60 秒刷新)
     if (
       !forceRefresh &&
@@ -237,28 +237,28 @@ class LarkApiClient {
     if (!data.tenant_access_token) {
       throw buildRequestError('tenant_access_token is empty', false);
     }
-    
+
     // 缓存令牌
     this.tenantToken = data.tenant_access_token;
     const expiresIn = Number(data.expire || data.expires_in || 7200); // 默认 2 小时
     this.tenantTokenExpireAt = Date.now() + expiresIn * 1000; // 计算过期时间
-    
+
     return this.tenantToken;
   }
 
   /**
    * 获取应用访问令牌(app_access_token)
    * 用于 OAuth 流程中的令牌交换和刷新
-   * 
+   *
    * 令牌缓存策略:同 getTenantAccessToken
-   * 
+   *
    * @param {boolean} [forceRefresh=false] - 是否强制刷新令牌
    * @returns {Promise<string>} - app_access_token
    * @throws {Error} - 如果获取失败
    */
   async getAppAccessToken(forceRefresh = false) {
     const now = Date.now();
-    
+
     // 检查缓存是否有效
     if (
       !forceRefresh &&
@@ -282,22 +282,22 @@ class LarkApiClient {
     if (!data.app_access_token) {
       throw buildRequestError('app_access_token is empty', false);
     }
-    
+
     this.appAccessToken = data.app_access_token;
     const expiresIn = Number(data.expire || data.expires_in || 7200);
     this.appAccessTokenExpireAt = Date.now() + expiresIn * 1000;
-    
+
     return this.appAccessToken;
   }
 
   /**
    * 构造 OAuth 用户授权 URL
    * 用于引导用户进行 Lark OAuth 登录
-   * 
+   *
    * @param {string} redirectUri - OAuth 回调地址(必须在 Lark 开发者平台配置)
    * @param {string} [state] - 状态参数(用于防 CSRF 攻击)
    * @returns {string} - 完整的授权 URL
-   * 
+   *
    * @example
    * const authUrl = client.getUserAuthorizeUrl(
    *   'http://127.0.0.1:3904/api/auth/callback',
@@ -316,12 +316,12 @@ class LarkApiClient {
   /**
    * 用授权码换取用户访问令牌(user_access_token)
    * OAuth 2.0 授权码模式的第二步
-   * 
+   *
    * OIDC 双通道策略:
    * 1. 优先使用 OIDC 端点(/open-apis/authen/v1/oidc/access_token)
    * 2. 如果 OIDC 失败,回退到旧版端点(/open-apis/authen/v1/access_token)
    * 3. 如果两者都失败,抛出包含两个错误的异常
-   * 
+   *
    * @param {string} code - OAuth 授权码(从回调 URL 中获取)
    * @returns {Promise<Object>} - 令牌数据对象
    *   {
@@ -331,7 +331,7 @@ class LarkApiClient {
    *     refresh_expires_in: number // 刷新令牌有效期(秒)
    *   }
    * @throws {Error} - 如果两个端点都失败
-   * 
+   *
    * @example
    * const tokenData = await client.exchangeAuthCodeForUserToken('auth_code_xxx');
    * console.log(tokenData.access_token);  // user_access_token
@@ -366,13 +366,13 @@ class LarkApiClient {
   /**
    * 刷新用户访问令牌
    * 当 user_access_token 过期时,使用 refresh_token 获取新的令牌
-   * 
+   *
    * OIDC 双通道策略:同 exchangeAuthCodeForUserToken
-   * 
+   *
    * @param {string} refreshToken - 刷新令牌
    * @returns {Promise<Object>} - 新的令牌数据对象(格式同 exchangeAuthCodeForUserToken)
    * @throws {Error} - 如果两个端点都失败
-   * 
+   *
    * @example
    * const newTokenData = await client.refreshUserAccessToken(oldRefreshToken);
    * // 使用新的 access_token 和 refresh_token 更新会话
@@ -405,7 +405,7 @@ class LarkApiClient {
   /**
    * 获取用户信息
    * 使用 user_access_token 获取当前登录用户的基本信息
-   * 
+   *
    * @param {string} userAccessToken - 用户访问令牌
    * @returns {Promise<Object>} - 用户信息对象
    *   {
@@ -416,7 +416,7 @@ class LarkApiClient {
    *     ...                 // 其他用户信息
    *   }
    * @throws {Error} - 如果请求失败
-   * 
+   *
    * @example
    * const userInfo = await client.getUserInfo(userAccessToken);
    * console.log(userInfo.name);     // 用户名
@@ -444,7 +444,7 @@ class LarkApiClient {
         `Failed to get user info: HTTP ${response.status}, code ${payload.code}, msg ${payload.msg || 'unknown'}`
       );
     }
-    
+
     return payload.data || {};
   }
 
@@ -453,11 +453,11 @@ class LarkApiClient {
    * 根据配置自动选择令牌类型:
    * - 如果配置了 accessTokenProvider,使用 user_access_token(用户级别)
    * - 否则使用 tenant_access_token(应用级别)
-   * 
+   *
    * @param {boolean} [forceRefresh=false] - 是否强制刷新令牌
    * @returns {Promise<string>} - 访问令牌
    * @throws {Error} - 如果获取失败
-   * 
+   *
    * @private
    * @example
    * const token = await client.getAccessToken();      // 获取令牌
@@ -477,18 +477,18 @@ class LarkApiClient {
   /**
    * 通用 HTTP 请求方法(带自动重试)
    * 这是所有 Lark API 调用的核心方法,包含完整的错误处理和重试逻辑
-   * 
+   *
    * 重试策略:
    * 1. 401 未授权:自动刷新令牌并重试
    * 2. 429 限流/5xx 服务器错误/可重试错误码:指数退避重试
    * 3. 网络错误(TypeError):指数退避重试
    * 4. 最多重试 maxRetries 次(默认 6 次)
-   * 
+   *
    * 退避算法:
    * - 基础延迟:500ms * 2^attempt
    * - 随机抖动:0-200ms
    * - 最大延迟:30 秒
-   * 
+   *
    * @param {Object} options - 请求选项
    * @param {string} options.method - HTTP 方法(GET/POST/PUT/DELETE)
    * @param {string} options.path - API 路径(相对于 baseUrl)
@@ -496,7 +496,7 @@ class LarkApiClient {
    * @param {Object} [options.body] - 请求体对象(仅 POST/PUT)
    * @returns {Promise<Object>} - 响应数据(已解包 data 字段)
    * @throws {Error} - 如果所有重试都失败
-   * 
+   *
    * @private
    * @example
    * // GET 请求
@@ -505,7 +505,7 @@ class LarkApiClient {
    *   path: '/open-apis/bitable/v1/apps/xxx/tables',
    *   query: { page_size: 100 }
    * });
-   * 
+   *
    * // POST 请求
    * const result = await client.request({
    *   method: 'POST',
@@ -550,7 +550,7 @@ class LarkApiClient {
         }
 
         const code = Number(payload.code);
-        
+
         // 5. 处理 401 未授权错误(令牌过期)
         if (response.status === 401) {
           await this.getAccessToken(true); // 强制刷新令牌
@@ -589,11 +589,11 @@ class LarkApiClient {
           error && error.retryable !== undefined
             ? Boolean(error.retryable)
             : error instanceof TypeError; // TypeError 通常是网络错误,可重试
-        
+
         if (!retryable || attempt >= this.maxRetries) {
           throw new Error(`重试后仍然失败: ${toErrorMessage(error)}`);
         }
-        
+
         // 计算退避延迟并重试
         const backoff = Math.min(30000, 500 * 2 ** attempt + Math.floor(Math.random() * 200));
         await sleep(backoff);
@@ -607,7 +607,7 @@ class LarkApiClient {
   /**
    * 列出多维表格中的所有数据表
    * 自动处理分页,返回所有表的完整列表
-   * 
+   *
    * @param {string} appToken - 多维表格的 app_token(从 URL 中获取)
    * @returns {Promise<Array>} - 数据表列表
    *   [
@@ -620,7 +620,7 @@ class LarkApiClient {
    *     ...
    *   ]
    * @throws {Error} - 如果请求失败
-   * 
+   *
    * @example
    * const tables = await client.listTables('bascnxxxxxx');
    * console.log(tables.length);        // 表数量
@@ -656,7 +656,7 @@ class LarkApiClient {
   /**
    * 列出数据表中的所有字段
    * 自动处理分页,返回所有字段的完整列表
-   * 
+   *
    * @param {string} appToken - 多维表格的 app_token
    * @param {string} tableId - 数据表 ID
    * @returns {Promise<Array>} - 字段列表
@@ -671,7 +671,7 @@ class LarkApiClient {
    *     ...
    *   ]
    * @throws {Error} - 如果请求失败
-   * 
+   *
    * @example
    * const fields = await client.listFields('bascnxxxxxx', 'tblxxxxxx');
    * console.log(fields.length);           // 字段数量
@@ -706,9 +706,9 @@ class LarkApiClient {
   /**
    * 搜索数据表记录(支持筛选和排序)
    * 使用 POST 方法,支持更复杂的查询条件(虽然当前实现未使用筛选条件)
-   * 
+   *
    * 注意:此方法返回单页数据,需要调用者自行处理分页
-   * 
+   *
    * @param {string} appToken - 多维表格的 app_token
    * @param {string} tableId - 数据表 ID
    * @param {Object} [options={}] - 搜索选项
@@ -723,14 +723,14 @@ class LarkApiClient {
    *     total: number        // 总记录数(可能不准确)
    *   }
    * @throws {Error} - 如果请求失败
-   * 
+   *
    * @example
    * // 获取第一页数据
    * const result = await client.searchRecords('bascnxxxxxx', 'tblxxxxxx', {
    *   pageSize: 100,
    *   fieldNames: ['字段1', '字段2'] // 只返回指定字段
    * });
-   * 
+   *
    * // 获取下一页
    * const nextResult = await client.searchRecords('bascnxxxxxx', 'tblxxxxxx', {
    *   pageToken: result.page_token
@@ -762,9 +762,9 @@ class LarkApiClient {
   /**
    * 列出数据表记录(简单列表)
    * 使用 GET 方法,不支持筛选和排序
-   * 
+   *
    * 注意:此方法返回单页数据,需要调用者自行处理分页
-   * 
+   *
    * @param {string} appToken - 多维表格的 app_token
    * @param {string} tableId - 数据表 ID
    * @param {Object} [options={}] - 列表选项
@@ -772,7 +772,7 @@ class LarkApiClient {
    * @param {string} [options.pageToken] - 分页令牌
    * @returns {Promise<Object>} - 列表结果(格式同 searchRecords)
    * @throws {Error} - 如果请求失败
-   * 
+   *
    * @example
    * const result = await client.listRecords('bascnxxxxxx', 'tblxxxxxx', {
    *   pageSize: 100
@@ -794,7 +794,7 @@ class LarkApiClient {
   /**
    * 批量创建记录
    * 一次最多创建 500 条记录
-   * 
+   *
    * @param {string} appToken - 多维表格的 app_token
    * @param {string} tableId - 数据表 ID
    * @param {Array<Object>} records - 记录列表
@@ -813,7 +813,7 @@ class LarkApiClient {
    *     records: Array  // 创建成功的记录列表(包含 record_id)
    *   }
    * @throws {Error} - 如果请求失败
-   * 
+   *
    * @example
    * const result = await client.batchCreateRecords('bascnxxxxxx', 'tblxxxxxx', [
    *   { fields: { '姓名': '张三', '年龄': 25 } },
@@ -837,7 +837,7 @@ class LarkApiClient {
   /**
    * 批量更新记录
    * 一次最多更新 500 条记录
-   * 
+   *
    * @param {string} appToken - 多维表格的 app_token
    * @param {string} tableId - 数据表 ID
    * @param {Array<Object>} records - 记录列表(必须包含 record_id)
@@ -857,7 +857,7 @@ class LarkApiClient {
    *     records: Array  // 更新成功的记录列表
    *   }
    * @throws {Error} - 如果请求失败
-   * 
+   *
    * @example
    * const result = await client.batchUpdateRecords('bascnxxxxxx', 'tblxxxxxx', [
    *   { record_id: 'recxxxxxx', fields: { '年龄': 26 } },
@@ -866,6 +866,9 @@ class LarkApiClient {
    * console.log(result.records.length); // 更新成功的记录数
    */
   async batchUpdateRecords(appToken, tableId, records) {
+    console.log('appToken:::::::::::', appToken);
+    console.log('tableId:::::::::::', tableId);
+    console.log('records:::::::::::', JSON.stringify(records));
     return this.request({
       method: 'POST',
       path: `/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_update`,
