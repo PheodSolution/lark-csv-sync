@@ -1368,6 +1368,15 @@ function hasEmptyKeyPart(parts) {
   return parts.some((part) => !String(part).trim());
 }
 
+function hasNegativeOneKeyValue(row, keyMappings) {
+  return (keyMappings || []).some((mapping) => {
+    const raw = row[mapping.csvColumn];
+    const trimmed =
+      typeof raw === 'string' ? raw.trim() : String(raw === undefined ? '' : raw).trim();
+    return trimmed === '-1';
+  });
+}
+
 /**
  * 从记录对象中提取记录 ID
  * 支持多种字段名格式
@@ -1859,9 +1868,17 @@ async function buildInsertFieldsWithKey(
 ) {
   const fields = { ...currentFields };
   for (const mapping of keyMappings) {
-    if (fields[mapping.fieldName] !== undefined) continue;
     const raw = row[mapping.csvColumn];
-    const trimmed = typeof raw === 'string' ? raw.trim() : String(raw || '').trim();
+    const trimmed =
+      typeof raw === 'string' ? raw.trim() : String(raw === undefined ? '' : raw).trim();
+
+    // key 値が -1 のときは既存キーとしては使わず、新規追加時もその key フィールドは空で登録する。
+    if (trimmed === '-1') {
+      delete fields[mapping.fieldName];
+      continue;
+    }
+
+    if (fields[mapping.fieldName] !== undefined) continue;
     if (!trimmed) continue;
     const fieldMeta = fieldMetaByName.get(normalizeText(mapping.fieldName));
     if (!fieldMeta) {
@@ -2902,13 +2919,14 @@ async function runSync(params) {
           linkResolvers,
           locationGeocoder
         );
+        const forceInsertByNegativeKey = hasNegativeOneKeyValue(row, keyMappings);
         if (hasEmptyKeyPart(keyParts)) {
           pushFailure(stats, rowCounterRef.value, 'キー値が空です', row);
           continue;
         }
 
-        const key = joinKey(keyParts);
-        const matched = recordIndex.get(key) || [];
+        const key = forceInsertByNegativeKey ? '' : joinKey(keyParts);
+        const matched = forceInsertByNegativeKey ? [] : recordIndex.get(key) || [];
         if (matched.length > 1) {
           pushFailure(stats, rowCounterRef.value, '同じキーを持つ複数のレコードがマッチしました', row);
           continue;
@@ -2959,7 +2977,7 @@ async function runSync(params) {
           continue;
         }
         if (!recordId) {
-          if (mode === MODE_UPDATE) {
+          if (mode === MODE_UPDATE && !forceInsertByNegativeKey) {
             pushFailure(stats, rowCounterRef.value, 'updateモードですが、対象レコードが見つかりません', row);
             continue;
           }
@@ -2985,7 +3003,7 @@ async function runSync(params) {
             stats.skippedRows += 1;
             continue;
           }
-          if (mode === MODE_UPSERT && pendingInsertByKey.has(key)) {
+          if (mode === MODE_UPSERT && key && pendingInsertByKey.has(key)) {
             const pendingInsert = pendingInsertByKey.get(key);
             pendingInsert.fields = {
               ...pendingInsert.fields,
@@ -3002,7 +3020,7 @@ async function runSync(params) {
             rowData: { ...row },
           };
           insertBatch.push(insertItem);
-          if (mode === MODE_UPSERT) {
+          if (mode === MODE_UPSERT && key) {
             pendingInsertByKey.set(key, insertItem);
           }
         } else {
